@@ -2,7 +2,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import AnimatedButton from './AnimatedButton';
-import { MapPin, Package, Calendar, Clock, DollarSign } from 'lucide-react';
+import { MapPin, Package, Calendar, Clock, DollarSign, User } from 'lucide-react';
 
 interface JobCardProps {
   job: {
@@ -20,6 +20,7 @@ interface JobCardProps {
   onAccept?: () => void;
   onView?: () => void;
   type?: 'business' | 'carrier';
+  carrierName?: string;
   className?: string;
 }
 
@@ -28,6 +29,7 @@ const JobCard: React.FC<JobCardProps> = ({
   onAccept, 
   onView, 
   type = 'carrier',
+  carrierName,
   className 
 }) => {
   // Status badge styling
@@ -45,6 +47,8 @@ const JobCard: React.FC<JobCardProps> = ({
       currency: 'USD',
     }).format(amount);
   };
+
+  const isJobAssigned = job.status === 'assigned' || job.status === 'in-progress';
 
   return (
     <div 
@@ -88,6 +92,19 @@ const JobCard: React.FC<JobCardProps> = ({
               <p className="text-sm font-medium">{job.dropoff}</p>
             </div>
           </div>
+          
+          {/* Carrier Assignment (only shown when job is assigned/in-progress) */}
+          {isJobAssigned && carrierName && (
+            <div className="flex items-start">
+              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-green-50 flex items-center justify-center mr-3">
+                <User className="h-4 w-4 text-green-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Assigned Carrier</p>
+                <p className="text-sm font-medium">{carrierName}</p>
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Additional Details */}

@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AnimatedButton from '@/components/AnimatedButton';
 import JobCard from '@/components/JobCard';
+import { Input } from '@/components/ui/input';
 import { 
   Package, 
   Truck, 
@@ -16,13 +17,14 @@ import {
   Settings,
   Filter,
   Calendar,
-  Clock
+  Clock,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 // Sample job data
-const sampleJobs = [
+const initialJobs = [
   {
     id: '1',
     title: 'Bakery Delivery to Downtown Office',
@@ -33,7 +35,7 @@ const sampleJobs = [
     time: '9:00 AM - 10:00 AM',
     price: 18.50,
     packageSize: 'Small (under 5lbs)',
-    status: 'available',
+    status: 'available' as const,
   },
   {
     id: '2',
@@ -45,7 +47,7 @@ const sampleJobs = [
     time: '11:00 AM - 12:00 PM',
     price: 22.75,
     packageSize: 'Medium (5-15lbs)',
-    status: 'available',
+    status: 'available' as const,
   },
   {
     id: '3',
@@ -57,7 +59,7 @@ const sampleJobs = [
     time: '2:00 PM - 3:00 PM',
     price: 25.00,
     packageSize: 'Medium (5-15lbs)',
-    status: 'in-progress',
+    status: 'in-progress' as const,
   },
   {
     id: '4',
@@ -69,7 +71,7 @@ const sampleJobs = [
     time: '6:00 PM - 7:00 PM',
     price: 15.25,
     packageSize: 'Small (under 5lbs)',
-    status: 'assigned',
+    status: 'assigned' as const,
   },
   {
     id: '5',
@@ -81,25 +83,101 @@ const sampleJobs = [
     time: '10:00 AM - 11:00 AM',
     price: 19.75,
     packageSize: 'Small (under 5lbs)',
-    status: 'completed',
+    status: 'completed' as const,
   },
 ];
+
+// Type definition for a job
+type JobStatus = 'available' | 'assigned' | 'in-progress' | 'completed';
+
+interface Job {
+  id: string;
+  title: string;
+  description: string;
+  pickup: string;
+  dropoff: string;
+  date: string;
+  time: string;
+  price: number;
+  packageSize: string;
+  status: JobStatus;
+}
+
+// Type definition for carrier names
+interface CarrierNames {
+  [key: string]: string;
+}
+
+// For new job modal
+interface NewJobForm {
+  title: string;
+  description: string;
+  pickup: string;
+  dropoff: string;
+  date: string;
+  time: string;
+  price: string;
+  packageSize: string;
+}
 
 const Dashboard: React.FC = () => {
   const [activeView, setActiveView] = useState('available');
   const [userType, setUserType] = useState<'business' | 'carrier'>('carrier');
+  const [jobs, setJobs] = useState<Job[]>(initialJobs);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showNewJobModal, setShowNewJobModal] = useState(false);
+  const [newJob, setNewJob] = useState<NewJobForm>({
+    title: '',
+    description: '',
+    pickup: '',
+    dropoff: '',
+    date: '',
+    time: '',
+    price: '',
+    packageSize: 'Small (under 5lbs)',
+  });
+  const [carrierNames, setCarrierNames] = useState<CarrierNames>({});
   const navigate = useNavigate();
   
-  // Filter jobs based on active view
-  const filteredJobs = sampleJobs.filter(job => {
-    if (activeView === 'available') return job.status === 'available';
-    if (activeView === 'active') return job.status === 'assigned' || job.status === 'in-progress';
-    if (activeView === 'completed') return job.status === 'completed';
-    return true;
+  // Filter jobs based on active view and search query
+  const filteredJobs = jobs.filter(job => {
+    // First filter by view
+    const matchesView = 
+      activeView === 'available' ? job.status === 'available' :
+      activeView === 'active' ? (job.status === 'assigned' || job.status === 'in-progress') :
+      activeView === 'completed' ? job.status === 'completed' :
+      true;
+    
+    // Then filter by search query if one exists
+    const matchesSearch = searchQuery === '' || 
+      job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.pickup.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.dropoff.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    return matchesView && matchesSearch;
   });
   
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  };
+  
   const handleAcceptJob = (jobId: string) => {
+    setJobs(prevJobs => prevJobs.map(job => 
+      job.id === jobId 
+        ? { ...job, status: 'assigned' as JobStatus } 
+        : job
+    ));
+    
+    // Set the carrier name for this job
+    setCarrierNames(prev => ({
+      ...prev,
+      [jobId]: "John Smith"
+    }));
+    
     toast.success('Job accepted successfully! Check your active jobs.');
+    // Switch to active view to show the accepted job
+    setActiveView('active');
   };
   
   const handleViewJob = (jobId: string) => {
@@ -115,8 +193,60 @@ const Dashboard: React.FC = () => {
   
   // Toggle user type for demo purposes
   const toggleUserType = () => {
-    setUserType(userType === 'carrier' ? 'business' : 'carrier');
+    setUserType(prevType => prevType === 'carrier' ? 'business' : 'carrier');
     toast.info(`Switched to ${userType === 'carrier' ? 'Business' : 'Carrier'} view`);
+  };
+  
+  // Handle new job input changes
+  const handleNewJobChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setNewJob(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  // Handle new job submission
+  const handleCreateJob = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate form
+    if (!newJob.title || !newJob.description || !newJob.pickup || !newJob.dropoff || !newJob.date || !newJob.time || !newJob.price) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    // Create new job
+    const jobId = (jobs.length + 1).toString();
+    const createdJob: Job = {
+      id: jobId,
+      title: newJob.title,
+      description: newJob.description,
+      pickup: newJob.pickup,
+      dropoff: newJob.dropoff,
+      date: newJob.date,
+      time: newJob.time,
+      price: parseFloat(newJob.price),
+      packageSize: newJob.packageSize,
+      status: 'available'
+    };
+    
+    setJobs(prev => [...prev, createdJob]);
+    setShowNewJobModal(false);
+    
+    // Reset form
+    setNewJob({
+      title: '',
+      description: '',
+      pickup: '',
+      dropoff: '',
+      date: '',
+      time: '',
+      price: '',
+      packageSize: 'Small (under 5lbs)',
+    });
+    
+    toast.success('Job created successfully!');
   };
 
   return (
@@ -303,12 +433,14 @@ const Dashboard: React.FC = () => {
         <main className="flex-1 overflow-auto p-4 md:p-6">
           {/* Search and filter bar */}
           <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="relative max-w-md">
+            <div className="relative max-w-md w-full">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
+              <Input
                 type="text"
                 placeholder="Search jobs..."
-                className="w-full pl-10 pr-4 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full pl-10 pr-4 py-2"
               />
             </div>
             
@@ -328,6 +460,7 @@ const Dashboard: React.FC = () => {
                   size="sm"
                   icon={<Plus className="h-4 w-4" />}
                   iconPosition="left"
+                  onClick={() => setShowNewJobModal(true)}
                 >
                   Create Job
                 </AnimatedButton>
@@ -345,6 +478,7 @@ const Dashboard: React.FC = () => {
                   onAccept={() => handleAcceptJob(job.id)}
                   onView={() => handleViewJob(job.id)}
                   type={userType}
+                  carrierName={carrierNames[job.id]}
                 />
               ))
             ) : (
@@ -367,6 +501,165 @@ const Dashboard: React.FC = () => {
           </div>
         </main>
       </div>
+      
+      {/* New Job Modal */}
+      {showNewJobModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-card rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <h3 className="text-lg font-medium">Create New Delivery Job</h3>
+              <button
+                onClick={() => setShowNewJobModal(false)}
+                className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateJob} className="p-4 space-y-4">
+              <div>
+                <label htmlFor="title" className="block text-sm font-medium mb-1">
+                  Job Title
+                </label>
+                <Input
+                  id="title"
+                  name="title"
+                  value={newJob.title}
+                  onChange={handleNewJobChange}
+                  placeholder="e.g., Office Supply Delivery"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="description" className="block text-sm font-medium mb-1">
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  value={newJob.description}
+                  onChange={handleNewJobChange}
+                  placeholder="Describe the delivery requirements..."
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-none min-h-[80px]"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="pickup" className="block text-sm font-medium mb-1">
+                  Pickup Address
+                </label>
+                <Input
+                  id="pickup"
+                  name="pickup"
+                  value={newJob.pickup}
+                  onChange={handleNewJobChange}
+                  placeholder="Full pickup address"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="dropoff" className="block text-sm font-medium mb-1">
+                  Dropoff Address
+                </label>
+                <Input
+                  id="dropoff"
+                  name="dropoff"
+                  value={newJob.dropoff}
+                  onChange={handleNewJobChange}
+                  placeholder="Full delivery address"
+                  required
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="date" className="block text-sm font-medium mb-1">
+                    Delivery Date
+                  </label>
+                  <Input
+                    id="date"
+                    name="date"
+                    type="date"
+                    value={newJob.date}
+                    onChange={handleNewJobChange}
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="time" className="block text-sm font-medium mb-1">
+                    Delivery Time
+                  </label>
+                  <Input
+                    id="time"
+                    name="time"
+                    value={newJob.time}
+                    onChange={handleNewJobChange}
+                    placeholder="e.g., 2:00 PM - 4:00 PM"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="price" className="block text-sm font-medium mb-1">
+                    Price ($)
+                  </label>
+                  <Input
+                    id="price"
+                    name="price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newJob.price}
+                    onChange={handleNewJobChange}
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="packageSize" className="block text-sm font-medium mb-1">
+                    Package Size
+                  </label>
+                  <select
+                    id="packageSize"
+                    name="packageSize"
+                    value={newJob.packageSize}
+                    onChange={handleNewJobChange}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="Small (under 5lbs)">Small (under 5lbs)</option>
+                    <option value="Medium (5-15lbs)">Medium (5-15lbs)</option>
+                    <option value="Large (15-30lbs)">Large (15-30lbs)</option>
+                    <option value="Extra Large (30+ lbs)">Extra Large (30+ lbs)</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-3 pt-2">
+                <AnimatedButton
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowNewJobModal(false)}
+                >
+                  Cancel
+                </AnimatedButton>
+                <AnimatedButton
+                  type="submit"
+                  variant="primary"
+                >
+                  Create Job
+                </AnimatedButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
