@@ -10,6 +10,7 @@ interface DashboardSidebarProps {
   userType: 'business' | 'carrier';
   toggleUserType: () => void;
   handleLogout: () => void;
+  userName?: string;
 }
 
 const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
@@ -17,7 +18,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   setActiveView,
   userType,
   toggleUserType,
-  handleLogout
+  handleLogout,
+  userName = "John Smith"
 }) => {
   return (
     <aside className="hidden md:flex flex-col w-64 bg-card border-r border-border">
@@ -131,7 +133,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             <User className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <p className="font-medium text-sm">John Smith</p>
+            <p className="font-medium text-sm">{userName}</p>
             <p className="text-xs text-muted-foreground capitalize">{userType}</p>
           </div>
         </div>

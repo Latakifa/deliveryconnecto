@@ -1,12 +1,13 @@
 
 import React from 'react';
-import { Bell, User, Package } from 'lucide-react';
+import { Bell, User, Package, MessageCircle, Settings } from 'lucide-react';
 
 interface DashboardHeaderProps {
   activeView: string;
+  userName?: string;
 }
 
-const DashboardHeader: React.FC<DashboardHeaderProps> = ({ activeView }) => {
+const DashboardHeader: React.FC<DashboardHeaderProps> = ({ activeView, userName = "John Smith" }) => {
   return (
     <header className="bg-card border-b border-border p-4 flex items-center justify-between">
       {/* Mobile menu & logo */}
@@ -24,9 +25,24 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({ activeView }) => {
         {activeView === 'active' && 'Active Jobs'}
         {activeView === 'completed' && 'Completed Jobs'}
         {activeView === 'analytics' && 'Analytics'}
-        {activeView === 'messages' && 'Messages'}
-        {activeView === 'profile' && 'Profile'}
-        {activeView === 'settings' && 'Settings'}
+        {activeView === 'messages' && (
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-5 w-5" />
+            <span>Messages</span>
+          </div>
+        )}
+        {activeView === 'profile' && (
+          <div className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            <span>{userName}'s Profile</span>
+          </div>
+        )}
+        {activeView === 'settings' && (
+          <div className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            <span>Account Settings</span>
+          </div>
+        )}
       </h1>
       
       {/* Actions */}
