@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Map, Package, MapPin, Navigation, Clock, DollarSign, User, Truck } from 'lucide-react';
@@ -41,7 +40,7 @@ const Delivery: React.FC = () => {
 
   useEffect(() => {
     const fetchJob = async () => {
-      if (!id) return;
+      if (!id || !user) return;
       
       setLoading(true);
       
@@ -57,6 +56,17 @@ const Delivery: React.FC = () => {
         
         if (!jobData) {
           throw new Error('Job not found');
+        }
+        
+        // Check if this job is available to the current user
+        const isBusinessOwner = jobData.business_id === user.id;
+        const isAssignedCarrier = jobData.carrier_id === user.id;
+        const isAvailable = jobData.status === 'available';
+        
+        if (!isBusinessOwner && !isAssignedCarrier && !isAvailable) {
+          toast.error('You do not have permission to view this job');
+          navigate('/dashboard');
+          return;
         }
         
         // Extract location data from strings (in a real app, these would be stored as coordinates)
@@ -119,15 +129,15 @@ const Delivery: React.FC = () => {
       } catch (error) {
         console.error('Error fetching job:', error);
         toast.error('Failed to load delivery information');
+        navigate('/dashboard');
       } finally {
         setLoading(false);
       }
     };
     
     fetchJob();
-  }, [id]);
+  }, [id, user, navigate]);
 
-  // Simulate carrier movement for demo purposes
   useEffect(() => {
     if (!isTracking || !job) return;
     
@@ -167,11 +177,18 @@ const Delivery: React.FC = () => {
   const handleStartDelivery = async () => {
     if (!job || !user) return;
     
+    // Verify this user is the assigned carrier
+    if (job.carrier_id !== user.id) {
+      toast.error('Only the assigned carrier can start this delivery');
+      return;
+    }
+    
     try {
       const { error } = await supabase
         .from('jobs')
         .update({ status: 'in-progress' })
-        .eq('id', job.id);
+        .eq('id', job.id)
+        .eq('carrier_id', user.id); // Ensure only assigned carrier can update
       
       if (error) throw error;
       
@@ -187,11 +204,18 @@ const Delivery: React.FC = () => {
   const handleCompleteDelivery = async () => {
     if (!job || !user) return;
     
+    // Verify this user is the assigned carrier
+    if (job.carrier_id !== user.id) {
+      toast.error('Only the assigned carrier can complete this delivery');
+      return;
+    }
+    
     try {
       const { error } = await supabase
         .from('jobs')
         .update({ status: 'completed' })
-        .eq('id', job.id);
+        .eq('id', job.id)
+        .eq('carrier_id', user.id); // Ensure only assigned carrier can update
       
       if (error) throw error;
       
@@ -206,21 +230,45 @@ const Delivery: React.FC = () => {
   const handleAcceptDelivery = async () => {
     if (!job || !user) return;
     
+    // First check if the job is still available
     try {
+      const { data: jobCheck, error: checkError } = await supabase
+        .from('jobs')
+        .select('status, carrier_id')
+        .eq('id', job.id)
+        .single();
+      
+      if (checkError) throw checkError;
+      
+      if (jobCheck.status !== 'available' || jobCheck.carrier_id) {
+        toast.error('This job is no longer available');
+        navigate('/dashboard');
+        return;
+      }
+      
       const { error } = await supabase
         .from('jobs')
         .update({ 
           status: 'assigned',
           carrier_id: user.id
         })
-        .eq('id', job.id);
+        .eq('id', job.id)
+        .is('carrier_id', null); // Only update if no carrier is assigned
       
       if (error) throw error;
       
+      // Retrieve the carrier's name
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+        
       setJob(prev => prev ? { 
         ...prev, 
         status: 'assigned',
-        carrier_id: user.id
+        carrier_id: user.id,
+        carrier_name: profileData?.full_name || 'Unknown Carrier'
       } : null);
       
       toast.success('Delivery accepted!');
@@ -362,28 +410,34 @@ const Delivery: React.FC = () => {
               </div>
               
               <div className="p-4 border-t border-border">
-                {job.status === 'assigned' && (
+                {job?.status === 'assigned' && job?.carrier_id === user?.id && (
                   <Button className="w-full" onClick={handleStartDelivery}>
                     Start Delivery
                   </Button>
                 )}
                 
-                {job.status === 'in-progress' && (
+                {job?.status === 'in-progress' && job?.carrier_id === user?.id && (
                   <Button className="w-full" onClick={handleCompleteDelivery}>
                     Complete Delivery
                   </Button>
                 )}
                 
-                {job.status === 'completed' && (
+                {job?.status === 'completed' && (
                   <div className="bg-primary/10 text-primary p-2 rounded-md text-center">
                     Delivery completed successfully
                   </div>
                 )}
                 
-                {job.status === 'available' && (
+                {job?.status === 'available' && (
                   <Button className="w-full" onClick={handleAcceptDelivery}>
                     Accept Delivery
                   </Button>
+                )}
+                
+                {(job?.status === 'assigned' || job?.status === 'in-progress') && job?.carrier_id !== user?.id && (
+                  <div className="bg-amber-100 text-amber-800 p-2 rounded-md text-center">
+                    This delivery has been assigned to another carrier
+                  </div>
                 )}
               </div>
             </div>
@@ -395,3 +449,4 @@ const Delivery: React.FC = () => {
 };
 
 export default Delivery;
+

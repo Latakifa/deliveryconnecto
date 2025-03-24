@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -67,7 +66,6 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   
-  // Fetch user profile and set user type
   useEffect(() => {
     const fetchProfile = async () => {
       if (user) {
@@ -97,7 +95,6 @@ const Dashboard: React.FC = () => {
     fetchProfile();
   }, [user]);
 
-  // Fetch jobs based on user type and active view
   useEffect(() => {
     const fetchJobs = async () => {
       if (!user) return;
@@ -107,17 +104,17 @@ const Dashboard: React.FC = () => {
       try {
         let query = supabase.from('jobs').select('*');
         
-        // For business users, fetch all their created jobs
-        // For carriers, fetch available jobs or jobs assigned to them
-        // The RLS policies will handle permissions automatically
-        
-        // Additional filter based on the active view
-        if (activeView === 'available') {
-          query = query.eq('status', 'available');
-        } else if (activeView === 'active') {
-          query = query.or(`status.eq.assigned,status.eq.in-progress`);
-        } else if (activeView === 'completed') {
-          query = query.eq('status', 'completed');
+        if (userType === 'business') {
+          query = query.eq('business_id', user.id);
+        } 
+        else if (userType === 'carrier') {
+          if (activeView === 'available') {
+            query = query.eq('status', 'available').is('carrier_id', null);
+          } else if (activeView === 'active') {
+            query = query.or(`and(status.eq.assigned,carrier_id.eq.${user.id}),and(status.eq.in-progress,carrier_id.eq.${user.id})`);
+          } else if (activeView === 'completed') {
+            query = query.eq('status', 'completed').eq('carrier_id', user.id);
+          }
         }
         
         const { data, error } = await query.order('created_at', { ascending: false });
@@ -127,7 +124,6 @@ const Dashboard: React.FC = () => {
         }
         
         if (data) {
-          // Transform the data to match our Job interface
           const formattedJobs: Job[] = data.map(job => ({
             id: job.id,
             title: job.title,
@@ -145,10 +141,9 @@ const Dashboard: React.FC = () => {
           
           setJobs(formattedJobs);
           
-          // Fetch carrier names for assigned jobs
           const carrierIds = formattedJobs
             .filter(job => job.carrier_id)
-            .map(job => job.carrier_id);
+            .map(job => job.carrier_id as string);
           
           if (carrierIds.length > 0) {
             const { data: carrierData } = await supabase
@@ -160,7 +155,6 @@ const Dashboard: React.FC = () => {
               const names: Record<string, string> = {};
               carrierData.forEach(carrier => {
                 if (carrier.full_name) {
-                  // Map carrier ID to their job ID
                   formattedJobs.forEach(job => {
                     if (job.carrier_id === carrier.id) {
                       names[job.id] = carrier.full_name || 'Unknown Carrier';
@@ -205,6 +199,20 @@ const Dashboard: React.FC = () => {
     }
     
     try {
+      const { data: jobCheck, error: checkError } = await supabase
+        .from('jobs')
+        .select('status, carrier_id')
+        .eq('id', jobId)
+        .single();
+      
+      if (checkError) throw checkError;
+      
+      if (jobCheck.status !== 'available' || jobCheck.carrier_id) {
+        toast.error('This job is no longer available');
+        setActiveView('available');
+        return;
+      }
+      
       const { error } = await supabase
         .from('jobs')
         .update({ 
@@ -215,7 +223,6 @@ const Dashboard: React.FC = () => {
       
       if (error) throw error;
       
-      // Update local state
       setJobs(prevJobs => prevJobs.map(job => 
         job.id === jobId 
           ? { ...job, status: 'assigned' as JobStatus, carrier_id: user.id } 
@@ -297,7 +304,6 @@ const Dashboard: React.FC = () => {
       if (error) throw error;
       
       if (data) {
-        // Add the new job to local state
         const newJobData: Job = {
           id: data.id,
           title: data.title,
@@ -375,7 +381,6 @@ const Dashboard: React.FC = () => {
     toast.success('Settings updated successfully!');
   };
 
-  // Show loading state
   if (loading && jobs.length === 0) {
     return (
       <div className="min-h-screen bg-background flex">
@@ -429,6 +434,7 @@ const Dashboard: React.FC = () => {
               userType={userType}
               carrierNames={carrierNames}
               activeView={activeView}
+              currentUserId={user?.id}
             />
           )}
 

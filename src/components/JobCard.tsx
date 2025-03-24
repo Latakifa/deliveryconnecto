@@ -24,6 +24,7 @@ interface JobCardProps {
   type?: 'business' | 'carrier';
   carrierName?: string;
   className?: string;
+  currentUserId?: string;
 }
 
 const JobCard: React.FC<JobCardProps> = ({ 
@@ -32,7 +33,8 @@ const JobCard: React.FC<JobCardProps> = ({
   onView, 
   type = 'carrier',
   carrierName,
-  className 
+  className,
+  currentUserId
 }) => {
   // Status badge styling
   const statusStyles = {
@@ -51,7 +53,17 @@ const JobCard: React.FC<JobCardProps> = ({
   };
 
   const isJobAssigned = job.status === 'assigned' || job.status === 'in-progress';
-  const showAcceptButton = type === 'carrier' && job.status === 'available' && !job.carrier_id;
+  
+  // Only show accept button if:
+  // 1. The job is available (not assigned, in-progress, or completed)
+  // 2. The user is a carrier
+  // 3. The job doesn't already have a carrier assigned
+  const showAcceptButton = type === 'carrier' && 
+                          job.status === 'available' && 
+                          !job.carrier_id;
+  
+  // Check if this job is assigned to the current user
+  const isAssignedToCurrentUser = job.carrier_id === currentUserId;
 
   return (
     <div 

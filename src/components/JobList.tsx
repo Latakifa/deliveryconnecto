@@ -14,6 +14,8 @@ interface Job {
   price: number;
   packageSize: string;
   status: 'available' | 'assigned' | 'in-progress' | 'completed';
+  business_id?: string;
+  carrier_id?: string;
 }
 
 interface JobListProps {
@@ -23,6 +25,7 @@ interface JobListProps {
   userType: 'business' | 'carrier';
   carrierNames: Record<string, string>;
   activeView: string;
+  currentUserId?: string;
 }
 
 const JobList: React.FC<JobListProps> = ({
@@ -31,7 +34,8 @@ const JobList: React.FC<JobListProps> = ({
   handleViewJob,
   userType,
   carrierNames,
-  activeView
+  activeView,
+  currentUserId
 }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -44,6 +48,7 @@ const JobList: React.FC<JobListProps> = ({
             onView={() => handleViewJob(job.id)}
             type={userType}
             carrierName={carrierNames[job.id]}
+            currentUserId={currentUserId}
           />
         ))
       ) : (
