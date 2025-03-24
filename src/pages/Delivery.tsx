@@ -18,7 +18,7 @@ interface DeliveryJob {
   id: string;
   title: string;
   description: string;
-  status: 'pending' | 'assigned' | 'in-progress' | 'completed';
+  status: 'available' | 'assigned' | 'in-progress' | 'completed';
   pickup: Location;
   dropoff: Location;
   price: number;
@@ -26,6 +26,8 @@ interface DeliveryJob {
   estimated_duration: string;
   customer_id: string;
   carrier_id?: string;
+  customer_name?: string;
+  carrier_name?: string;
 }
 
 const Delivery: React.FC = () => {
@@ -37,41 +39,90 @@ const Delivery: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Placeholder function to get job data
-  // In a real app, this would fetch from your Supabase database
   useEffect(() => {
     const fetchJob = async () => {
+      if (!id) return;
+      
       setLoading(true);
       
-      // This is placeholder data - in a real app, fetch from Supabase
-      setTimeout(() => {
-        setJob({
-          id: id || '1',
-          title: 'Office Supply Delivery',
-          description: 'Deliver office supplies from the warehouse to downtown office',
-          status: 'in-progress',
-          pickup: {
-            lng: -122.4214,
-            lat: 37.7749,
-            address: '123 Main St, San Francisco, CA'
-          },
-          dropoff: {
-            lng: -122.4094,
-            lat: 37.7884,
-            address: '456 Market St, San Francisco, CA'
-          },
-          price: 25.99,
-          created_at: new Date().toISOString(),
-          estimated_duration: '30 minutes',
-          customer_id: 'user-123',
-          carrier_id: user?.id
-        });
+      try {
+        // Fetch job from database
+        const { data: jobData, error: jobError } = await supabase
+          .from('jobs')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        if (jobError) throw jobError;
+        
+        if (!jobData) {
+          throw new Error('Job not found');
+        }
+        
+        // Extract location data from strings (in a real app, these would be stored as coordinates)
+        const parseLocation = (address: string): Location => {
+          // Simple mock to generate different coordinates for pickup and dropoff
+          const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+          const offset = (hash % 10) * 0.01;
+          
+          return {
+            lng: -122.4194 + offset,
+            lat: 37.7749 + offset,
+            address
+          };
+        };
+        
+        // Fetch customer and carrier profiles
+        const { data: customerData } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', jobData.business_id)
+          .single();
+        
+        let carrierData = null;
+        if (jobData.carrier_id) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', jobData.carrier_id)
+            .single();
+          
+          carrierData = data;
+        }
+        
+        // Format job data
+        const formattedJob: DeliveryJob = {
+          id: jobData.id,
+          title: jobData.title,
+          description: jobData.description,
+          status: jobData.status,
+          pickup: parseLocation(jobData.pickup),
+          dropoff: parseLocation(jobData.dropoff),
+          price: Number(jobData.price),
+          created_at: jobData.created_at,
+          estimated_duration: '30 minutes', // Mock data
+          customer_id: jobData.business_id,
+          carrier_id: jobData.carrier_id,
+          customer_name: customerData?.full_name || 'Unknown Customer',
+          carrier_name: carrierData?.full_name || undefined
+        };
+        
+        setJob(formattedJob);
+        
+        // If job is in progress, initialize carrier location
+        if (formattedJob.status === 'in-progress') {
+          setCarrierLocation(formattedJob.pickup);
+        }
+      } catch (error) {
+        console.error('Error fetching job:', error);
+        toast.error('Failed to load delivery information');
+      } finally {
         setLoading(false);
-      }, 1000);
+      }
     };
     
     fetchJob();
-  }, [id, user?.id]);
+  }, [id]);
 
   // Simulate carrier movement for demo purposes
   useEffect(() => {
@@ -110,14 +161,70 @@ const Delivery: React.FC = () => {
     return () => clearInterval(interval);
   }, [isTracking, job]);
 
-  const handleStartDelivery = () => {
-    setIsTracking(true);
-    toast.success('Delivery started! Tracking is now active.');
+  const handleStartDelivery = async () => {
+    if (!job || !user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .update({ status: 'in-progress' })
+        .eq('id', job.id);
+      
+      if (error) throw error;
+      
+      setJob(prev => prev ? { ...prev, status: 'in-progress' } : null);
+      setIsTracking(true);
+      toast.success('Delivery started! Tracking is now active.');
+    } catch (error) {
+      console.error('Error starting delivery:', error);
+      toast.error('Failed to start delivery');
+    }
   };
 
-  const handleCompleteDelivery = () => {
-    toast.success('Delivery marked as completed!');
-    navigate('/dashboard');
+  const handleCompleteDelivery = async () => {
+    if (!job || !user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .update({ status: 'completed' })
+        .eq('id', job.id);
+      
+      if (error) throw error;
+      
+      toast.success('Delivery marked as completed!');
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error completing delivery:', error);
+      toast.error('Failed to complete delivery');
+    }
+  };
+
+  const handleAcceptDelivery = async () => {
+    if (!job || !user) return;
+    
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .update({ 
+          status: 'assigned',
+          carrier_id: user.id
+        })
+        .eq('id', job.id);
+      
+      if (error) throw error;
+      
+      setJob(prev => prev ? { 
+        ...prev, 
+        status: 'assigned',
+        carrier_id: user.id
+      } : null);
+      
+      toast.success('Delivery accepted!');
+    } catch (error) {
+      console.error('Error accepting delivery:', error);
+      toast.error('Failed to accept delivery');
+    }
   };
 
   if (loading) {
@@ -237,16 +344,16 @@ const Delivery: React.FC = () => {
                     <User className="h-4 w-4" />
                     <span>Customer</span>
                   </div>
-                  <p className="font-medium">John Doe</p>
+                  <p className="font-medium">{job.customer_name}</p>
                 </div>
                 
-                {job.carrier_id && (
+                {job.carrier_id && job.carrier_name && (
                   <div>
                     <div className="text-sm text-muted-foreground mb-1 flex items-center gap-2">
                       <Truck className="h-4 w-4" />
                       <span>Carrier</span>
                     </div>
-                    <p className="font-medium">Sarah Smith</p>
+                    <p className="font-medium">{job.carrier_name}</p>
                   </div>
                 )}
               </div>
@@ -270,8 +377,8 @@ const Delivery: React.FC = () => {
                   </div>
                 )}
                 
-                {job.status === 'pending' && (
-                  <Button className="w-full" onClick={() => toast.success('Delivery accepted!')}>
+                {job.status === 'available' && (
+                  <Button className="w-full" onClick={handleAcceptDelivery}>
                     Accept Delivery
                   </Button>
                 )}

@@ -16,6 +16,8 @@ interface JobCardProps {
     price: number;
     packageSize: string;
     status: 'available' | 'assigned' | 'in-progress' | 'completed';
+    business_id?: string;
+    carrier_id?: string;
   };
   onAccept?: () => void;
   onView?: () => void;
@@ -49,6 +51,7 @@ const JobCard: React.FC<JobCardProps> = ({
   };
 
   const isJobAssigned = job.status === 'assigned' || job.status === 'in-progress';
+  const showAcceptButton = type === 'carrier' && job.status === 'available' && !job.carrier_id;
 
   return (
     <div 
@@ -144,7 +147,7 @@ const JobCard: React.FC<JobCardProps> = ({
         
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-3">
-          {type === 'carrier' && job.status === 'available' && onAccept && (
+          {showAcceptButton && onAccept && (
             <AnimatedButton
               onClick={onAccept}
               variant="primary"
@@ -157,7 +160,7 @@ const JobCard: React.FC<JobCardProps> = ({
           {onView && (
             <AnimatedButton
               onClick={onView}
-              variant={type === 'carrier' && job.status === 'available' ? "outline" : "primary"}
+              variant={showAcceptButton ? "outline" : "primary"}
               className="w-full sm:w-auto"
             >
               View Details

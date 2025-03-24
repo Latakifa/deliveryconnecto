@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -25,6 +26,8 @@ interface Job {
   price: number;
   packageSize: string;
   status: JobStatus;
+  business_id?: string;
+  carrier_id?: string;
 }
 
 interface Profile {
@@ -59,10 +62,12 @@ const Dashboard: React.FC = () => {
     { id: 4, sender: 'Tech Support', content: 'The app will undergo maintenance tonight from 2-3 AM.', time: '1 hour ago', unread: true },
   ]);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
   
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   
+  // Fetch user profile and set user type
   useEffect(() => {
     const fetchProfile = async () => {
       if (user) {
@@ -91,45 +96,147 @@ const Dashboard: React.FC = () => {
     
     fetchProfile();
   }, [user]);
+
+  // Fetch jobs based on user type and active view
+  useEffect(() => {
+    const fetchJobs = async () => {
+      if (!user) return;
+      
+      setLoading(true);
+      
+      try {
+        let query = supabase.from('jobs').select('*');
+        
+        // For business users, fetch all their created jobs
+        // For carriers, fetch available jobs or jobs assigned to them
+        // The RLS policies will handle permissions automatically
+        
+        // Additional filter based on the active view
+        if (activeView === 'available') {
+          query = query.eq('status', 'available');
+        } else if (activeView === 'active') {
+          query = query.or(`status.eq.assigned,status.eq.in-progress`);
+        } else if (activeView === 'completed') {
+          query = query.eq('status', 'completed');
+        }
+        
+        const { data, error } = await query.order('created_at', { ascending: false });
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data) {
+          // Transform the data to match our Job interface
+          const formattedJobs: Job[] = data.map(job => ({
+            id: job.id,
+            title: job.title,
+            description: job.description,
+            pickup: job.pickup,
+            dropoff: job.dropoff,
+            date: job.date,
+            time: job.time,
+            price: Number(job.price),
+            packageSize: job.package_size,
+            status: job.status as JobStatus,
+            business_id: job.business_id,
+            carrier_id: job.carrier_id
+          }));
+          
+          setJobs(formattedJobs);
+          
+          // Fetch carrier names for assigned jobs
+          const carrierIds = formattedJobs
+            .filter(job => job.carrier_id)
+            .map(job => job.carrier_id);
+          
+          if (carrierIds.length > 0) {
+            const { data: carrierData } = await supabase
+              .from('profiles')
+              .select('id, full_name')
+              .in('id', carrierIds);
+            
+            if (carrierData) {
+              const names: Record<string, string> = {};
+              carrierData.forEach(carrier => {
+                if (carrier.full_name) {
+                  // Map carrier ID to their job ID
+                  formattedJobs.forEach(job => {
+                    if (job.carrier_id === carrier.id) {
+                      names[job.id] = carrier.full_name || 'Unknown Carrier';
+                    }
+                  });
+                }
+              });
+              
+              setCarrierNames(names);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching jobs:', error);
+        toast.error('Failed to load jobs');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchJobs();
+  }, [user, activeView, userType]);
   
   const filteredJobs = jobs.filter(job => {
-    const matchesView = 
-      activeView === 'available' ? job.status === 'available' :
-      activeView === 'active' ? (job.status === 'assigned' || job.status === 'in-progress') :
-      activeView === 'completed' ? job.status === 'completed' :
-      true;
-    
     const matchesSearch = searchQuery === '' || 
       job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       job.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       job.pickup.toLowerCase().includes(searchQuery.toLowerCase()) ||
       job.dropoff.toLowerCase().includes(searchQuery.toLowerCase());
     
-    return matchesView && matchesSearch;
+    return matchesSearch;
   });
   
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   };
   
-  const handleAcceptJob = (jobId: string) => {
-    setJobs(prevJobs => prevJobs.map(job => 
-      job.id === jobId 
-        ? { ...job, status: 'assigned' as JobStatus } 
-        : job
-    ));
+  const handleAcceptJob = async (jobId: string) => {
+    if (!user) {
+      toast.error('You must be logged in to accept jobs');
+      return;
+    }
     
-    setCarrierNames(prev => ({
-      ...prev,
-      [jobId]: userName
-    }));
-    
-    toast.success('Job accepted successfully! Check your active jobs.');
-    setActiveView('active');
+    try {
+      const { error } = await supabase
+        .from('jobs')
+        .update({ 
+          status: 'assigned',
+          carrier_id: user.id
+        })
+        .eq('id', jobId);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setJobs(prevJobs => prevJobs.map(job => 
+        job.id === jobId 
+          ? { ...job, status: 'assigned' as JobStatus, carrier_id: user.id } 
+          : job
+      ));
+      
+      setCarrierNames(prev => ({
+        ...prev,
+        [jobId]: userName
+      }));
+      
+      toast.success('Job accepted successfully! Check your active jobs.');
+      setActiveView('active');
+    } catch (error) {
+      console.error('Error accepting job:', error);
+      toast.error('Failed to accept job');
+    }
   };
   
   const handleViewJob = (jobId: string) => {
-    toast.info(`Viewing details for job #${jobId}`);
+    navigate(`/delivery/${jobId}`);
   };
   
   const handleLogout = async () => {
@@ -154,43 +261,79 @@ const Dashboard: React.FC = () => {
     }));
   };
   
-  const handleCreateJob = (e: React.FormEvent) => {
+  const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!user) {
+      toast.error('You must be logged in to create jobs');
+      return;
+    }
     
     if (!newJob.title || !newJob.description || !newJob.pickup || !newJob.dropoff || !newJob.date || !newJob.time || !newJob.price) {
       toast.error('Please fill in all required fields');
       return;
     }
     
-    const jobId = (jobs.length + 1).toString();
-    const createdJob: Job = {
-      id: jobId,
-      title: newJob.title,
-      description: newJob.description,
-      pickup: newJob.pickup,
-      dropoff: newJob.dropoff,
-      date: newJob.date,
-      time: newJob.time,
-      price: parseFloat(newJob.price),
-      packageSize: newJob.packageSize,
-      status: 'available'
-    };
-    
-    setJobs(prev => [...prev, createdJob]);
-    setShowNewJobModal(false);
-    
-    setNewJob({
-      title: '',
-      description: '',
-      pickup: '',
-      dropoff: '',
-      date: '',
-      time: '',
-      price: '',
-      packageSize: 'Small (under 5lbs)',
-    });
-    
-    toast.success('Job created successfully!');
+    try {
+      const jobData = {
+        title: newJob.title,
+        description: newJob.description,
+        pickup: newJob.pickup,
+        dropoff: newJob.dropoff,
+        date: newJob.date,
+        time: newJob.time,
+        price: parseFloat(newJob.price),
+        package_size: newJob.packageSize,
+        status: 'available',
+        business_id: user.id
+      };
+      
+      const { data, error } = await supabase
+        .from('jobs')
+        .insert(jobData)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      if (data) {
+        // Add the new job to local state
+        const newJobData: Job = {
+          id: data.id,
+          title: data.title,
+          description: data.description,
+          pickup: data.pickup,
+          dropoff: data.dropoff,
+          date: data.date,
+          time: data.time,
+          price: Number(data.price),
+          packageSize: data.package_size,
+          status: data.status as JobStatus,
+          business_id: data.business_id,
+          carrier_id: data.carrier_id
+        };
+        
+        setJobs(prev => [newJobData, ...prev]);
+      }
+      
+      setShowNewJobModal(false);
+      
+      setNewJob({
+        title: '',
+        description: '',
+        pickup: '',
+        dropoff: '',
+        date: '',
+        time: '',
+        price: '',
+        packageSize: 'Small (under 5lbs)',
+      });
+      
+      toast.success('Job created successfully!');
+    } catch (error) {
+      console.error('Error creating job:', error);
+      toast.error('Failed to create job');
+    }
   };
 
   const handleMarkAsRead = (messageId: number) => {
@@ -231,6 +374,28 @@ const Dashboard: React.FC = () => {
     e.preventDefault();
     toast.success('Settings updated successfully!');
   };
+
+  // Show loading state
+  if (loading && jobs.length === 0) {
+    return (
+      <div className="min-h-screen bg-background flex">
+        <DashboardSidebar 
+          activeView={activeView}
+          setActiveView={setActiveView}
+          userType={userType}
+          toggleUserType={toggleUserType}
+          handleLogout={handleLogout}
+          userName={userName}
+        />
+        <div className="flex-1 flex flex-col max-h-screen overflow-hidden">
+          <DashboardHeader activeView={activeView} userName={userName} />
+          <main className="flex-1 overflow-auto p-4 md:p-6 flex items-center justify-center">
+            <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -553,4 +718,3 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
-
