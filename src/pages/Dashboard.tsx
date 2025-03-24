@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import DashboardSidebar from '@/components/DashboardSidebar';
@@ -8,6 +8,8 @@ import JobList from '@/components/JobList';
 import NewJobForm from '@/components/NewJobForm';
 import { Input } from '@/components/ui/input';
 import { User, Mail, Phone, MapPin, Briefcase, Calendar, Check, Truck } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 // Sample job data
 const initialJobs = [
@@ -89,6 +91,13 @@ interface Job {
   status: JobStatus;
 }
 
+interface Profile {
+  id: string;
+  full_name: string | null;
+  user_type: 'business' | 'carrier' | null;
+  avatar_url: string | null;
+}
+
 const Dashboard: React.FC = () => {
   const [activeView, setActiveView] = useState('available');
   const [userType, setUserType] = useState<'business' | 'carrier'>('carrier');
@@ -113,18 +122,40 @@ const Dashboard: React.FC = () => {
     { id: 3, sender: 'Sarah Johnson', content: 'Thanks for the quick delivery yesterday!', time: '5 hours ago', unread: true },
     { id: 4, sender: 'Tech Support', content: 'The app will undergo maintenance tonight from 2-3 AM.', time: '1 hour ago', unread: true },
   ]);
-  const navigate = useNavigate();
+  const [profile, setProfile] = useState<Profile | null>(null);
   
-  // Filter jobs based on active view and search query
+  const navigate = useNavigate();
+  const { signOut, user } = useAuth();
+  
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching profile:', error);
+        } else if (data) {
+          setProfile(data);
+          if (data.full_name) setUserName(data.full_name);
+          if (data.user_type) setUserType(data.user_type as 'business' | 'carrier');
+        }
+      }
+    };
+    
+    fetchProfile();
+  }, [user]);
+  
   const filteredJobs = jobs.filter(job => {
-    // First filter by view
     const matchesView = 
       activeView === 'available' ? job.status === 'available' :
       activeView === 'active' ? (job.status === 'assigned' || job.status === 'in-progress') :
       activeView === 'completed' ? job.status === 'completed' :
       true;
     
-    // Then filter by search query if one exists
     const matchesSearch = searchQuery === '' || 
       job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       job.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -145,14 +176,12 @@ const Dashboard: React.FC = () => {
         : job
     ));
     
-    // Set the carrier name for this job
     setCarrierNames(prev => ({
       ...prev,
       [jobId]: userName
     }));
     
     toast.success('Job accepted successfully! Check your active jobs.');
-    // Switch to active view to show the accepted job
     setActiveView('active');
   };
   
@@ -160,20 +189,20 @@ const Dashboard: React.FC = () => {
     toast.info(`Viewing details for job #${jobId}`);
   };
   
-  const handleLogout = () => {
-    toast.info('Logging out...');
-    setTimeout(() => {
+  const handleLogout = async () => {
+    try {
+      await signOut();
       navigate('/');
-    }, 1500);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
   
-  // Toggle user type for demo purposes
   const toggleUserType = () => {
     setUserType(prevType => prevType === 'carrier' ? 'business' : 'carrier');
     toast.info(`Switched to ${userType === 'carrier' ? 'Business' : 'Carrier'} view`);
   };
   
-  // Handle new job input changes
   const handleNewJobChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setNewJob(prev => ({
@@ -182,17 +211,14 @@ const Dashboard: React.FC = () => {
     }));
   };
   
-  // Handle new job submission
   const handleCreateJob = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate form
     if (!newJob.title || !newJob.description || !newJob.pickup || !newJob.dropoff || !newJob.date || !newJob.time || !newJob.price) {
       toast.error('Please fill in all required fields');
       return;
     }
     
-    // Create new job
     const jobId = (jobs.length + 1).toString();
     const createdJob: Job = {
       id: jobId,
@@ -210,7 +236,6 @@ const Dashboard: React.FC = () => {
     setJobs(prev => [...prev, createdJob]);
     setShowNewJobModal(false);
     
-    // Reset form
     setNewJob({
       title: '',
       description: '',
@@ -225,7 +250,6 @@ const Dashboard: React.FC = () => {
     toast.success('Job created successfully!');
   };
 
-  // Mark a message as read
   const handleMarkAsRead = (messageId: number) => {
     setMessages(prev => 
       prev.map(message => 
@@ -236,13 +260,30 @@ const Dashboard: React.FC = () => {
     );
   };
 
-  // Update user profile
-  const handleUpdateProfile = (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Profile updated successfully!');
+    
+    if (user) {
+      const updates = {
+        id: user.id,
+        full_name: userName,
+        user_type: userType,
+        updated_at: new Date().toISOString(),
+      };
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+      
+      if (error) {
+        toast.error('Failed to update profile: ' + error.message);
+      } else {
+        toast.success('Profile updated successfully!');
+      }
+    }
   };
 
-  // Update settings
   const handleUpdateSettings = (e: React.FormEvent) => {
     e.preventDefault();
     toast.success('Settings updated successfully!');
@@ -250,7 +291,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar Component */}
       <DashboardSidebar 
         activeView={activeView}
         setActiveView={setActiveView}
@@ -260,14 +300,10 @@ const Dashboard: React.FC = () => {
         userName={userName}
       />
       
-      {/* Main content */}
       <div className="flex-1 flex flex-col max-h-screen overflow-hidden">
-        {/* Header Component */}
         <DashboardHeader activeView={activeView} userName={userName} />
         
-        {/* Main content area */}
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          {/* Only show search and filter for job-related views */}
           {(activeView === 'available' || activeView === 'active' || activeView === 'completed') && (
             <SearchFilterBar
               searchQuery={searchQuery}
@@ -277,7 +313,6 @@ const Dashboard: React.FC = () => {
             />
           )}
           
-          {/* Job list for job-related views */}
           {(activeView === 'available' || activeView === 'active' || activeView === 'completed') && (
             <JobList
               filteredJobs={filteredJobs}
@@ -289,7 +324,6 @@ const Dashboard: React.FC = () => {
             />
           )}
 
-          {/* Messages View */}
           {activeView === 'messages' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-4">
@@ -323,7 +357,6 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Profile View */}
           {activeView === 'profile' && (
             <div className="max-w-3xl mx-auto">
               <div className="flex flex-col md:flex-row gap-8 mb-8">
@@ -452,7 +485,6 @@ const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Settings View */}
           {activeView === 'settings' && (
             <div className="max-w-3xl mx-auto">
               <form onSubmit={handleUpdateSettings} className="space-y-8">
@@ -566,7 +598,6 @@ const Dashboard: React.FC = () => {
         </main>
       </div>
       
-      {/* New Job Modal Component */}
       <NewJobForm
         showNewJobModal={showNewJobModal}
         setShowNewJobModal={setShowNewJobModal}

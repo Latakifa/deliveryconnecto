@@ -3,6 +3,7 @@ import React from 'react';
 import { Package, Truck, User, LogOut, BarChart, MessageCircle, Settings, Clock } from 'lucide-react';
 import AnimatedButton from '@/components/AnimatedButton';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DashboardSidebarProps {
   activeView: string;
@@ -21,6 +22,11 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   handleLogout,
   userName = "John Smith"
 }) => {
+  const { user } = useAuth();
+  
+  // Use user's name from Supabase profile if available
+  const displayName = user?.user_metadata?.name || userName;
+
   return (
     <aside className="hidden md:flex flex-col w-64 bg-card border-r border-border">
       {/* Logo */}
@@ -133,7 +139,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
             <User className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <p className="font-medium text-sm">{userName}</p>
+            <p className="font-medium text-sm">{displayName}</p>
             <p className="text-xs text-muted-foreground capitalize">{userType}</p>
           </div>
         </div>

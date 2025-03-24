@@ -6,6 +6,7 @@ import UserTypeSelector from '@/components/UserTypeSelector';
 import { ArrowLeft, Eye, EyeOff, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AuthData {
   email: string;
@@ -19,6 +20,7 @@ const Auth: React.FC = () => {
   const [searchParams] = useSearchParams();
   const isRegister = searchParams.get('register') === 'true';
   const roleParam = searchParams.get('role') as 'business' | 'carrier' | null;
+  const returnUrl = searchParams.get('returnUrl') || '/dashboard';
   
   const [authData, setAuthData] = useState<AuthData>({
     email: '',
@@ -29,9 +31,16 @@ const Auth: React.FC = () => {
   });
   
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(roleParam ? 2 : 1);
   const navigate = useNavigate();
+  const { signIn, signUp, loading, user } = useAuth();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate(returnUrl);
+    }
+  }, [user, navigate, returnUrl]);
 
   // Set page title based on current mode
   useEffect(() => {
@@ -83,27 +92,29 @@ const Auth: React.FC = () => {
         toast.error('Please select your user type');
         return;
       }
+
+      try {
+        await signUp(authData.email, authData.password, {
+          name: authData.name,
+          userType: authData.userType
+        });
+        // Registration success is handled in the AuthContext
+      } catch (error) {
+        // Error is handled in the AuthContext
+      }
     } else {
       // Validation for login
       if (!authData.email || !authData.password) {
         toast.error('Please fill out all fields');
         return;
       }
-    }
-    
-    setLoading(true);
-    
-    // Simulate API call
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Success handling
-      toast.success(isRegister ? 'Account created successfully!' : 'Logged in successfully!');
-      navigate('/dashboard');
-    } catch (error) {
-      toast.error('Authentication failed. Please try again.');
-    } finally {
-      setLoading(false);
+
+      try {
+        await signIn(authData.email, authData.password);
+        // Login success is handled in the AuthContext
+      } catch (error) {
+        // Error is handled in the AuthContext
+      }
     }
   };
 

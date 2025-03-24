@@ -2,13 +2,15 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import AnimatedButton from './AnimatedButton';
-import { Menu, X, Package, Truck } from 'lucide-react';
+import { Menu, X, Package, Truck, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   // Update scrolled state based on window scroll position
   useEffect(() => {
@@ -30,6 +32,15 @@ const Navbar = () => {
     { name: 'How It Works', path: '/#how-it-works' },
     { name: 'About Us', path: '/#about' },
   ];
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      // Redirect is handled in AuthContext
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   return (
     <header
@@ -69,23 +80,46 @@ const Navbar = () => {
         
         {/* Action Buttons */}
         <div className="hidden md:flex items-center gap-4">
-          <Link to="/auth">
-            <AnimatedButton 
-              variant="ghost" 
-              size="sm"
-            >
-              Log In
-            </AnimatedButton>
-          </Link>
-          <Link to="/auth?register=true">
-            <AnimatedButton 
-              variant="primary" 
-              size="sm"
-              className="animate-fade-in"
-            >
-              Get Started
-            </AnimatedButton>
-          </Link>
+          {user ? (
+            <>
+              <Link to="/dashboard">
+                <AnimatedButton 
+                  variant="ghost" 
+                  size="sm"
+                >
+                  Dashboard
+                </AnimatedButton>
+              </Link>
+              <AnimatedButton 
+                variant="outline" 
+                size="sm"
+                onClick={handleLogout}
+                icon={<LogOut className="h-4 w-4" />}
+              >
+                Log Out
+              </AnimatedButton>
+            </>
+          ) : (
+            <>
+              <Link to="/auth">
+                <AnimatedButton 
+                  variant="ghost" 
+                  size="sm"
+                >
+                  Log In
+                </AnimatedButton>
+              </Link>
+              <Link to="/auth?register=true">
+                <AnimatedButton 
+                  variant="primary" 
+                  size="sm"
+                  className="animate-fade-in"
+                >
+                  Get Started
+                </AnimatedButton>
+              </Link>
+            </>
+          )}
         </div>
         
         {/* Mobile Menu Button */}
@@ -121,24 +155,48 @@ const Navbar = () => {
             
             {/* Mobile Action Buttons */}
             <div className="flex flex-col gap-2 mt-2">
-              <Link to="/auth" className="w-full">
-                <AnimatedButton 
-                  variant="outline" 
-                  size="md"
-                  className="w-full"
-                >
-                  Log In
-                </AnimatedButton>
-              </Link>
-              <Link to="/auth?register=true" className="w-full">
-                <AnimatedButton 
-                  variant="primary" 
-                  size="md"
-                  className="w-full"
-                >
-                  Get Started
-                </AnimatedButton>
-              </Link>
+              {user ? (
+                <>
+                  <Link to="/dashboard" className="w-full">
+                    <AnimatedButton 
+                      variant="outline" 
+                      size="md"
+                      className="w-full"
+                    >
+                      Dashboard
+                    </AnimatedButton>
+                  </Link>
+                  <AnimatedButton 
+                    variant="secondary" 
+                    size="md"
+                    className="w-full"
+                    onClick={handleLogout}
+                  >
+                    Log Out
+                  </AnimatedButton>
+                </>
+              ) : (
+                <>
+                  <Link to="/auth" className="w-full">
+                    <AnimatedButton 
+                      variant="outline" 
+                      size="md"
+                      className="w-full"
+                    >
+                      Log In
+                    </AnimatedButton>
+                  </Link>
+                  <Link to="/auth?register=true" className="w-full">
+                    <AnimatedButton 
+                      variant="primary" 
+                      size="md"
+                      className="w-full"
+                    >
+                      Get Started
+                    </AnimatedButton>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
