@@ -11,70 +11,6 @@ import { User, Mail, Phone, MapPin, Briefcase, Calendar, Check, Truck } from 'lu
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 
-// Sample job data
-const initialJobs = [
-  {
-    id: '1',
-    title: 'Bakery Delivery to Downtown Office',
-    description: 'Deliver fresh pastries from Sweet Treats Bakery to Skyline Tower',
-    pickup: '123 Baker Street, San Francisco, CA',
-    dropoff: '456 Market Street, San Francisco, CA',
-    date: 'June 15, 2023',
-    time: '9:00 AM - 10:00 AM',
-    price: 18.50,
-    packageSize: 'Small (under 5lbs)',
-    status: 'available' as const,
-  },
-  {
-    id: '2',
-    title: 'Grocery Package Delivery',
-    description: 'Deliver grocery order from Whole Foods Market to residential address',
-    pickup: '845 Market St, San Francisco, CA',
-    dropoff: '1288 Howard St, San Francisco, CA',
-    date: 'June 15, 2023',
-    time: '11:00 AM - 12:00 PM',
-    price: 22.75,
-    packageSize: 'Medium (5-15lbs)',
-    status: 'available' as const,
-  },
-  {
-    id: '3',
-    title: 'Electronics Store to Customer',
-    description: 'Deliver new laptop from TechWorld to customer',
-    pickup: '400 Sutter St, San Francisco, CA',
-    dropoff: '1155 Mission St, San Francisco, CA',
-    date: 'June 15, 2023',
-    time: '2:00 PM - 3:00 PM',
-    price: 25.00,
-    packageSize: 'Medium (5-15lbs)',
-    status: 'in-progress' as const,
-  },
-  {
-    id: '4',
-    title: 'Restaurant to Residential Delivery',
-    description: 'Deliver meal order from Pasta Paradise to customer',
-    pickup: '500 Grove St, San Francisco, CA',
-    dropoff: '775 Valencia St, San Francisco, CA',
-    date: 'June 15, 2023',
-    time: '6:00 PM - 7:00 PM',
-    price: 15.25,
-    packageSize: 'Small (under 5lbs)',
-    status: 'assigned' as const,
-  },
-  {
-    id: '5',
-    title: 'Gift Shop Package to Hotel',
-    description: 'Deliver gift basket from Enchanted Gifts to Grand Hotel',
-    pickup: '220 Montgomery St, San Francisco, CA',
-    dropoff: '335 Powell St, San Francisco, CA',
-    date: 'June 16, 2023',
-    time: '10:00 AM - 11:00 AM',
-    price: 19.75,
-    packageSize: 'Small (under 5lbs)',
-    status: 'completed' as const,
-  },
-];
-
 // Type definition for a job
 type JobStatus = 'available' | 'assigned' | 'in-progress' | 'completed';
 
@@ -101,7 +37,7 @@ interface Profile {
 const Dashboard: React.FC = () => {
   const [activeView, setActiveView] = useState('available');
   const [userType, setUserType] = useState<'business' | 'carrier'>('carrier');
-  const [jobs, setJobs] = useState<Job[]>(initialJobs);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewJobModal, setShowNewJobModal] = useState(false);
   const [newJob, setNewJob] = useState({
@@ -139,7 +75,14 @@ const Dashboard: React.FC = () => {
         if (error) {
           console.error('Error fetching profile:', error);
         } else if (data) {
-          setProfile(data);
+          const profileData: Profile = {
+            id: data.id,
+            full_name: data.full_name,
+            user_type: data.user_type as 'business' | 'carrier' | null,
+            avatar_url: data.avatar_url
+          };
+          
+          setProfile(profileData);
           if (data.full_name) setUserName(data.full_name);
           if (data.user_type) setUserType(data.user_type as 'business' | 'carrier');
         }
@@ -610,3 +553,4 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+
