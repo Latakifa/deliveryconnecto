@@ -39,40 +39,55 @@ const Map: React.FC<MapProps> = ({
   const dropoffMarker = useRef<mapboxgl.Marker | null>(null);
   const carrierMarker = useRef<mapboxgl.Marker | null>(null);
   const [selectingMode, setSelectingMode] = useState<'pickup' | 'dropoff' | null>(null);
+  const [mapInitialized, setMapInitialized] = useState(false);
 
   // Initialize map
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [-122.4194, 37.7749], // Default to San Francisco
-      zoom: 12
-    });
+    try {
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [-122.4194, 37.7749], // Default to San Francisco
+        zoom: 12
+      });
 
-    // Add navigation controls
-    map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      // Add navigation controls
+      map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-    // Add geocoder control for searching addresses
-    const geocoder = new mapboxgl.GeolocateControl({
-      positionOptions: {
-        enableHighAccuracy: true
-      },
-      trackUserLocation: trackingMode,
-      showUserLocation: true
-    });
-    map.current.addControl(geocoder);
+      // Add geocoder control for searching addresses
+      const geocoder = new mapboxgl.GeolocateControl({
+        positionOptions: {
+          enableHighAccuracy: true
+        },
+        trackUserLocation: trackingMode,
+        showUserLocation: true
+      });
+      
+      map.current.addControl(geocoder);
 
-    // Clean up on unmount
-    return () => {
-      map.current?.remove();
-    };
+      // Wait for map to load before setting initialized state
+      map.current.on('load', () => {
+        console.log('Map initialized successfully');
+        setMapInitialized(true);
+      });
+
+      // Clean up on unmount
+      return () => {
+        if (map.current) {
+          map.current.remove();
+          map.current = null;
+        }
+      };
+    } catch (error) {
+      console.error('Error initializing map:', error);
+    }
   }, [trackingMode]);
 
   // Handle click on map to select location
   useEffect(() => {
-    if (!map.current || readOnly) return;
+    if (!map.current || !mapInitialized || readOnly) return;
 
     const handleMapClick = async (e: mapboxgl.MapMouseEvent) => {
       if (!selectingMode || !map.current) return;
@@ -118,74 +133,90 @@ const Map: React.FC<MapProps> = ({
         map.current.off('click', handleMapClick);
       }
     };
-  }, [selectingMode, onPickupSelect, onDropoffSelect, readOnly]);
+  }, [selectingMode, onPickupSelect, onDropoffSelect, readOnly, mapInitialized]);
 
   // Add or update markers for pickup and dropoff locations
   useEffect(() => {
-    if (!map.current) return;
+    if (!map.current || !mapInitialized) return;
     
     // Setup pickup marker
     if (pickupLocation) {
       if (pickupMarker.current) pickupMarker.current.remove();
-      pickupMarker.current = new mapboxgl.Marker({ color: '#4169E1' })
-        .setLngLat([pickupLocation.lng, pickupLocation.lat])
-        .addTo(map.current);
-      
-      // Adjust map view to include pickup location
-      if (!dropoffLocation) {
-        map.current.flyTo({
-          center: [pickupLocation.lng, pickupLocation.lat],
-          zoom: 14
-        });
+      try {
+        pickupMarker.current = new mapboxgl.Marker({ color: '#4169E1' })
+          .setLngLat([pickupLocation.lng, pickupLocation.lat])
+          .addTo(map.current);
+        
+        // Adjust map view to include pickup location
+        if (!dropoffLocation) {
+          map.current.flyTo({
+            center: [pickupLocation.lng, pickupLocation.lat],
+            zoom: 14
+          });
+        }
+      } catch (error) {
+        console.error('Error adding pickup marker:', error);
       }
     }
     
     // Setup dropoff marker
     if (dropoffLocation) {
       if (dropoffMarker.current) dropoffMarker.current.remove();
-      dropoffMarker.current = new mapboxgl.Marker({ color: '#FF5349' })
-        .setLngLat([dropoffLocation.lng, dropoffLocation.lat])
-        .addTo(map.current);
-      
-      // Adjust map view to include dropoff location
-      if (!pickupLocation) {
-        map.current.flyTo({
-          center: [dropoffLocation.lng, dropoffLocation.lat],
-          zoom: 14
-        });
+      try {
+        dropoffMarker.current = new mapboxgl.Marker({ color: '#FF5349' })
+          .setLngLat([dropoffLocation.lng, dropoffLocation.lat])
+          .addTo(map.current);
+        
+        // Adjust map view to include dropoff location
+        if (!pickupLocation) {
+          map.current.flyTo({
+            center: [dropoffLocation.lng, dropoffLocation.lat],
+            zoom: 14
+          });
+        }
+      } catch (error) {
+        console.error('Error adding dropoff marker:', error);
       }
     }
     
     // If both pickup and dropoff are set, fit map to show both
     if (pickupLocation && dropoffLocation && map.current) {
-      const bounds = new mapboxgl.LngLatBounds()
-        .extend([pickupLocation.lng, pickupLocation.lat])
-        .extend([dropoffLocation.lng, dropoffLocation.lat]);
-      
-      map.current.fitBounds(bounds, {
-        padding: 100
-      });
+      try {
+        const bounds = new mapboxgl.LngLatBounds()
+          .extend([pickupLocation.lng, pickupLocation.lat])
+          .extend([dropoffLocation.lng, dropoffLocation.lat]);
+        
+        map.current.fitBounds(bounds, {
+          padding: 100
+        });
+      } catch (error) {
+        console.error('Error fitting bounds:', error);
+      }
     }
-  }, [pickupLocation, dropoffLocation]);
+  }, [pickupLocation, dropoffLocation, mapInitialized]);
 
   // Handle carrier location for tracking
   useEffect(() => {
-    if (!map.current || !trackingMode || !carrierLocation) return;
+    if (!map.current || !mapInitialized || !trackingMode || !carrierLocation) return;
     
-    if (carrierMarker.current) {
-      carrierMarker.current.setLngLat([carrierLocation.lng, carrierLocation.lat]);
-    } else {
-      carrierMarker.current = new mapboxgl.Marker({ color: '#32CD32' })
-        .setLngLat([carrierLocation.lng, carrierLocation.lat])
-        .addTo(map.current);
+    try {
+      if (carrierMarker.current) {
+        carrierMarker.current.setLngLat([carrierLocation.lng, carrierLocation.lat]);
+      } else {
+        carrierMarker.current = new mapboxgl.Marker({ color: '#32CD32' })
+          .setLngLat([carrierLocation.lng, carrierLocation.lat])
+          .addTo(map.current);
+      }
+      
+      // Update map view to follow carrier
+      map.current.flyTo({
+        center: [carrierLocation.lng, carrierLocation.lat],
+        zoom: 15
+      });
+    } catch (error) {
+      console.error('Error updating carrier marker:', error);
     }
-    
-    // Update map view to follow carrier
-    map.current.flyTo({
-      center: [carrierLocation.lng, carrierLocation.lat],
-      zoom: 15
-    });
-  }, [carrierLocation, trackingMode]);
+  }, [carrierLocation, trackingMode, mapInitialized]);
 
   return (
     <div className="relative w-full h-[400px] md:h-[500px] lg:h-[600px] rounded-lg overflow-hidden">

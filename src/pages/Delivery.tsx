@@ -90,12 +90,15 @@ const Delivery: React.FC = () => {
           carrierData = data;
         }
         
+        // Ensure status is properly typed
+        const jobStatus = jobData.status as 'available' | 'assigned' | 'in-progress' | 'completed';
+        
         // Format job data
         const formattedJob: DeliveryJob = {
           id: jobData.id,
           title: jobData.title,
           description: jobData.description,
-          status: jobData.status,
+          status: jobStatus,
           pickup: parseLocation(jobData.pickup),
           dropoff: parseLocation(jobData.dropoff),
           price: Number(jobData.price),
