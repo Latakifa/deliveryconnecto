@@ -1,12 +1,11 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-// Properly store Mapbox token - in a real production app this should be moved to environment variables
-mapboxgl.accessToken = 'pk.eyJ1IjoiZGVtby1hY2NvdW50LWxvdmFibGUiLCJhIjoiY2x3eHF1dmFrMGNpMjJqbnhqcnllaXcyciJ9.w6ULgbRYCeUFgptHYzKcQg';
+// Updated Mapbox token with the provided token
+mapboxgl.accessToken = 'pk.eyJ1IjoibXdhc25naW1zIiwiYSI6ImNtN2l6M2w0bTAxbDIybHM3cjdpMTlpNHIifQ.6Z17fdhqFj28jSAQfb0Txw';
 
 interface Location {
   lng: number;
@@ -50,7 +49,7 @@ const Map: React.FC<MapProps> = ({
     if (!mapContainer.current || map.current) return;
 
     try {
-      console.log('Initializing map...');
+      console.log('Initializing map with new token...');
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
