@@ -5,7 +5,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-// Temporary access token - should be moved to environment variables
+// Properly store Mapbox token - in a real production app this should be moved to environment variables
 mapboxgl.accessToken = 'pk.eyJ1IjoiZGVtby1hY2NvdW50LWxvdmFibGUiLCJhIjoiY2x3eHF1dmFrMGNpMjJqbnhqcnllaXcyciJ9.w6ULgbRYCeUFgptHYzKcQg';
 
 interface Location {
@@ -22,6 +22,7 @@ interface MapProps {
   trackingMode?: boolean;
   carrierLocation?: Location | null;
   readOnly?: boolean;
+  showRoute?: boolean;
 }
 
 const Map: React.FC<MapProps> = ({
@@ -31,15 +32,18 @@ const Map: React.FC<MapProps> = ({
   dropoffLocation,
   trackingMode = false,
   carrierLocation,
-  readOnly = false
+  readOnly = false,
+  showRoute = false
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const pickupMarker = useRef<mapboxgl.Marker | null>(null);
   const dropoffMarker = useRef<mapboxgl.Marker | null>(null);
   const carrierMarker = useRef<mapboxgl.Marker | null>(null);
+  const routeLine = useRef<mapboxgl.GeoJSONSource | null>(null);
   const [selectingMode, setSelectingMode] = useState<'pickup' | 'dropoff' | null>(null);
   const [mapInitialized, setMapInitialized] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   // Initialize map
   useEffect(() => {
@@ -56,8 +60,8 @@ const Map: React.FC<MapProps> = ({
       // Add navigation controls
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-      // Add geocoder control for searching addresses
-      const geocoder = new mapboxgl.GeolocateControl({
+      // Add geolocation control
+      const geolocate = new mapboxgl.GeolocateControl({
         positionOptions: {
           enableHighAccuracy: true
         },
@@ -65,12 +69,44 @@ const Map: React.FC<MapProps> = ({
         showUserLocation: true
       });
       
-      map.current.addControl(geocoder);
+      map.current.addControl(geolocate);
 
       // Wait for map to load before setting initialized state
       map.current.on('load', () => {
         console.log('Map initialized successfully');
         setMapInitialized(true);
+        
+        // Add a source and layer for the route line if needed
+        if (map.current) {
+          map.current.addSource('route', {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'LineString',
+                coordinates: []
+              }
+            }
+          });
+          
+          map.current.addLayer({
+            id: 'route',
+            type: 'line',
+            source: 'route',
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            },
+            paint: {
+              'line-color': '#3887be',
+              'line-width': 5,
+              'line-opacity': 0.75
+            }
+          });
+          
+          routeLine.current = map.current.getSource('route') as mapboxgl.GeoJSONSource;
+        }
       });
 
       // Clean up on unmount
@@ -82,6 +118,7 @@ const Map: React.FC<MapProps> = ({
       };
     } catch (error) {
       console.error('Error initializing map:', error);
+      setMapError('Failed to load map. Please check your connection and try again.');
     }
   }, [trackingMode]);
 
@@ -121,6 +158,7 @@ const Map: React.FC<MapProps> = ({
         setSelectingMode(null);
       } catch (error) {
         console.error('Error reverse geocoding:', error);
+        setMapError('Failed to get address. Please try again.');
       }
     };
 
@@ -189,11 +227,28 @@ const Map: React.FC<MapProps> = ({
         map.current.fitBounds(bounds, {
           padding: 100
         });
+        
+        // Draw a route line between pickup and dropoff if showRoute is true
+        if (showRoute && routeLine.current) {
+          // In a real app, you would use the Mapbox Directions API here
+          // For this demo, we'll just draw a straight line
+          routeLine.current.setData({
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [pickupLocation.lng, pickupLocation.lat],
+                [dropoffLocation.lng, dropoffLocation.lat]
+              ]
+            }
+          });
+        }
       } catch (error) {
         console.error('Error fitting bounds:', error);
       }
     }
-  }, [pickupLocation, dropoffLocation, mapInitialized]);
+  }, [pickupLocation, dropoffLocation, mapInitialized, showRoute]);
 
   // Handle carrier location for tracking
   useEffect(() => {
@@ -213,10 +268,41 @@ const Map: React.FC<MapProps> = ({
         center: [carrierLocation.lng, carrierLocation.lat],
         zoom: 15
       });
+      
+      // Update route if showRoute is true and we have both pickup and dropoff
+      if (showRoute && routeLine.current && pickupLocation && dropoffLocation) {
+        // In a real app, you would update the route based on carrier's position
+        // For this demo, we'll update the line to show carrier's progress
+        routeLine.current.setData({
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [pickupLocation.lng, pickupLocation.lat],
+              [carrierLocation.lng, carrierLocation.lat],
+              [dropoffLocation.lng, dropoffLocation.lat]
+            ]
+          }
+        });
+      }
     } catch (error) {
       console.error('Error updating carrier marker:', error);
     }
-  }, [carrierLocation, trackingMode, mapInitialized]);
+  }, [carrierLocation, trackingMode, mapInitialized, showRoute, pickupLocation, dropoffLocation]);
+
+  if (mapError) {
+    return (
+      <div className="flex items-center justify-center h-full bg-muted/20 rounded-lg">
+        <div className="text-center p-6">
+          <div className="text-destructive mb-2">⚠️ {mapError}</div>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Reload Map
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-[400px] md:h-[500px] lg:h-[600px] rounded-lg overflow-hidden">

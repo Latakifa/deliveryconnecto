@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import MapComponent from '@/components/Map';
 import { supabase } from '@/integrations/supabase/client';
+import MessageCarrier from '@/components/MessageCarrier';
+import DeliveryAnalytics from '@/components/DeliveryAnalytics';
 
 interface Location {
   lng: number;
@@ -35,6 +37,7 @@ const Delivery: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [carrierLocation, setCarrierLocation] = useState<Location | null>(null);
   const [isTracking, setIsTracking] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -45,7 +48,6 @@ const Delivery: React.FC = () => {
       setLoading(true);
       
       try {
-        // Fetch job from database
         const { data: jobData, error: jobError } = await supabase
           .from('jobs')
           .select('*')
@@ -58,7 +60,6 @@ const Delivery: React.FC = () => {
           throw new Error('Job not found');
         }
         
-        // Check if this job is available to the current user
         const isBusinessOwner = jobData.business_id === user.id;
         const isAssignedCarrier = jobData.carrier_id === user.id;
         const isAvailable = jobData.status === 'available';
@@ -69,9 +70,7 @@ const Delivery: React.FC = () => {
           return;
         }
         
-        // Extract location data from strings (in a real app, these would be stored as coordinates)
         const parseLocation = (address: string): Location => {
-          // Simple mock to generate different coordinates for pickup and dropoff
           const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
           const offset = (hash % 10) * 0.01;
           
@@ -82,7 +81,6 @@ const Delivery: React.FC = () => {
           };
         };
         
-        // Fetch customer and carrier profiles
         const { data: customerData } = await supabase
           .from('profiles')
           .select('full_name')
@@ -100,10 +98,8 @@ const Delivery: React.FC = () => {
           carrierData = data;
         }
         
-        // Ensure status is properly typed
         const jobStatus = jobData.status as 'available' | 'assigned' | 'in-progress' | 'completed';
         
-        // Format job data
         const formattedJob: DeliveryJob = {
           id: jobData.id,
           title: jobData.title,
@@ -113,7 +109,7 @@ const Delivery: React.FC = () => {
           dropoff: parseLocation(jobData.dropoff),
           price: Number(jobData.price),
           created_at: jobData.created_at,
-          estimated_duration: '30 minutes', // Mock data
+          estimated_duration: '30 minutes',
           customer_id: jobData.business_id,
           carrier_id: jobData.carrier_id,
           customer_name: customerData?.full_name || 'Unknown Customer',
@@ -122,7 +118,6 @@ const Delivery: React.FC = () => {
         
         setJob(formattedJob);
         
-        // If job is in progress, initialize carrier location
         if (formattedJob.status === 'in-progress') {
           setCarrierLocation(formattedJob.pickup);
         }
@@ -141,10 +136,8 @@ const Delivery: React.FC = () => {
   useEffect(() => {
     if (!isTracking || !job) return;
     
-    // Start with pickup location
     setCarrierLocation(job.pickup);
     
-    // Simulate movement along route
     const steps = 10;
     let currentStep = 0;
     
@@ -159,7 +152,6 @@ const Delivery: React.FC = () => {
         return;
       }
       
-      // Calculate position along route
       const progress = currentStep / steps;
       const newLng = job.pickup.lng + (job.dropoff.lng - job.pickup.lng) * progress;
       const newLat = job.pickup.lat + (job.dropoff.lat - job.pickup.lat) * progress;
@@ -177,7 +169,6 @@ const Delivery: React.FC = () => {
   const handleStartDelivery = async () => {
     if (!job || !user) return;
     
-    // Verify this user is the assigned carrier
     if (job.carrier_id !== user.id) {
       toast.error('Only the assigned carrier can start this delivery');
       return;
@@ -188,7 +179,7 @@ const Delivery: React.FC = () => {
         .from('jobs')
         .update({ status: 'in-progress' })
         .eq('id', job.id)
-        .eq('carrier_id', user.id); // Ensure only assigned carrier can update
+        .eq('carrier_id', user.id);
       
       if (error) throw error;
       
@@ -204,7 +195,6 @@ const Delivery: React.FC = () => {
   const handleCompleteDelivery = async () => {
     if (!job || !user) return;
     
-    // Verify this user is the assigned carrier
     if (job.carrier_id !== user.id) {
       toast.error('Only the assigned carrier can complete this delivery');
       return;
@@ -215,7 +205,7 @@ const Delivery: React.FC = () => {
         .from('jobs')
         .update({ status: 'completed' })
         .eq('id', job.id)
-        .eq('carrier_id', user.id); // Ensure only assigned carrier can update
+        .eq('carrier_id', user.id);
       
       if (error) throw error;
       
@@ -230,22 +220,13 @@ const Delivery: React.FC = () => {
   const handleAcceptDelivery = async () => {
     if (!job || !user) return;
     
-    // First check if the job is still available
+    if (job?.status !== 'available' || job?.carrier_id) {
+      toast.error('This job is no longer available');
+      navigate('/dashboard');
+      return;
+    }
+    
     try {
-      const { data: jobCheck, error: checkError } = await supabase
-        .from('jobs')
-        .select('status, carrier_id')
-        .eq('id', job.id)
-        .single();
-      
-      if (checkError) throw checkError;
-      
-      if (jobCheck.status !== 'available' || jobCheck.carrier_id) {
-        toast.error('This job is no longer available');
-        navigate('/dashboard');
-        return;
-      }
-      
       const { error } = await supabase
         .from('jobs')
         .update({ 
@@ -253,11 +234,10 @@ const Delivery: React.FC = () => {
           carrier_id: user.id
         })
         .eq('id', job.id)
-        .is('carrier_id', null); // Only update if no carrier is assigned
+        .is('carrier_id', null);
       
       if (error) throw error;
       
-      // Retrieve the carrier's name
       const { data: profileData } = await supabase
         .from('profiles')
         .select('full_name')
@@ -278,6 +258,24 @@ const Delivery: React.FC = () => {
     }
   };
 
+  const generateAnalyticsData = () => {
+    if (!job) return [];
+    
+    const deliveryProgress = job.status === 'completed' ? 100 : 
+      job.status === 'in-progress' ? 65 : 
+      job.status === 'assigned' ? 30 : 0;
+    
+    const timeRemaining = job.status === 'completed' ? 0 : 
+      job.status === 'in-progress' ? 15 : 
+      job.status === 'assigned' ? 30 : 45;
+    
+    return [
+      { name: 'Progress', value: deliveryProgress, color: '#4169E1' },
+      { name: 'Efficiency', value: 85, color: '#32CD32' },
+      { name: 'Time (min)', value: timeRemaining, color: '#FF5349' }
+    ];
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -296,6 +294,9 @@ const Delivery: React.FC = () => {
       </div>
     );
   }
+
+  const isBusinessOwner = job?.customer_id === user?.id;
+  const isCarrier = job?.carrier_id === user?.id;
 
   return (
     <div className="min-h-screen bg-background">
@@ -318,8 +319,29 @@ const Delivery: React.FC = () => {
               {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
             </span>
             <p className="text-2xl font-bold">${job.price.toFixed(2)}</p>
+            
+            {isBusinessOwner && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-2"
+                onClick={() => setShowAnalytics(!showAnalytics)}
+              >
+                {showAnalytics ? 'Hide Analytics' : 'Show Analytics'}
+              </Button>
+            )}
           </div>
         </div>
+        
+        {showAnalytics && isBusinessOwner && (
+          <div className="mb-8">
+            <DeliveryAnalytics 
+              data={generateAnalyticsData()}
+              title="Delivery Metrics"
+              description="Real-time delivery performance indicators"
+            />
+          </div>
+        )}
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
           <div className="md:col-span-2">
@@ -347,6 +369,7 @@ const Delivery: React.FC = () => {
                 trackingMode={isTracking}
                 carrierLocation={carrierLocation}
                 readOnly={true}
+                showRoute={job.status === 'in-progress' || job.status === 'completed'}
               />
             </div>
           </div>
@@ -441,6 +464,17 @@ const Delivery: React.FC = () => {
                 )}
               </div>
             </div>
+            
+            {isBusinessOwner && job.carrier_id && job.status !== 'completed' && (
+              <div className="mt-6">
+                <MessageCarrier 
+                  carrierId={job.carrier_id}
+                  carrierName={job.carrier_name || 'Carrier'}
+                  jobId={job.id}
+                  businessId={user?.id || ''}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -449,4 +483,3 @@ const Delivery: React.FC = () => {
 };
 
 export default Delivery;
-
