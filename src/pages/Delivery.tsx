@@ -1,19 +1,16 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Map, Package, MapPin, Navigation, Clock, DollarSign, User, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import MapComponent from '@/components/Map';
+import MapContainer from '@/components/map/MapContainer';
 import { supabase } from '@/integrations/supabase/client';
 import MessageCarrier from '@/components/MessageCarrier';
 import DeliveryAnalytics from '@/components/DeliveryAnalytics';
-
-interface Location {
-  lng: number;
-  lat: number;
-  address: string;
-}
+import { Location } from '@/types/location';
+import { formatCurrency, formatPackageWeight } from '@/utils/formatters';
 
 interface DeliveryJob {
   id: string;
@@ -29,6 +26,7 @@ interface DeliveryJob {
   carrier_id?: string;
   customer_name?: string;
   carrier_name?: string;
+  packageSize: string;
 }
 
 const Delivery: React.FC = () => {
@@ -71,12 +69,26 @@ const Delivery: React.FC = () => {
         }
         
         const parseLocation = (address: string): Location => {
+          // Try to get location from localStorage if it exists
+          const storageKey = address === jobData.pickup ? 'pickupLocation' : 'dropoffLocation';
+          const storedLocation = localStorage.getItem(storageKey);
+          
+          if (storedLocation) {
+            try {
+              return JSON.parse(storedLocation);
+            } catch (e) {
+              console.error('Error parsing stored location:', e);
+            }
+          }
+          
+          // Fallback to generating a location with an offset
           const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
           const offset = (hash % 10) * 0.01;
           
           return {
-            lng: -122.4194 + offset,
-            lat: 37.7749 + offset,
+            // Default to Nairobi with a small offset
+            lng: 36.8219 + offset,
+            lat: -1.2921 + offset,
             address
           };
         };
@@ -113,7 +125,8 @@ const Delivery: React.FC = () => {
           customer_id: jobData.business_id,
           carrier_id: jobData.carrier_id,
           customer_name: customerData?.full_name || 'Unknown Customer',
-          carrier_name: carrierData?.full_name || undefined
+          carrier_name: carrierData?.full_name || undefined,
+          packageSize: jobData.package_size || jobData.packageSize // Handle both formats
         };
         
         setJob(formattedJob);
@@ -318,7 +331,7 @@ const Delivery: React.FC = () => {
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary mb-2">
               {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
             </span>
-            <p className="text-2xl font-bold">${job.price.toFixed(2)}</p>
+            <p className="text-2xl font-bold">{formatCurrency(job.price)}</p>
             
             {isBusinessOwner && (
               <Button 
@@ -363,7 +376,7 @@ const Delivery: React.FC = () => {
                 )}
               </div>
               
-              <MapComponent
+              <MapContainer
                 pickupLocation={job.pickup}
                 dropoffLocation={job.dropoff}
                 trackingMode={isTracking}
@@ -399,6 +412,14 @@ const Delivery: React.FC = () => {
                 
                 <div>
                   <div className="text-sm text-muted-foreground mb-1 flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    <span>Package Size</span>
+                  </div>
+                  <p className="font-medium">{formatPackageWeight(job.packageSize)}</p>
+                </div>
+                
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1 flex items-center gap-2">
                     <Clock className="h-4 w-4" />
                     <span>Estimated Time</span>
                   </div>
@@ -410,7 +431,7 @@ const Delivery: React.FC = () => {
                     <DollarSign className="h-4 w-4" />
                     <span>Payment</span>
                   </div>
-                  <p className="font-medium">${job.price.toFixed(2)}</p>
+                  <p className="font-medium">{formatCurrency(job.price)}</p>
                 </div>
                 
                 <div>

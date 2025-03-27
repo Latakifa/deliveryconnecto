@@ -3,6 +3,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import AnimatedButton from './AnimatedButton';
 import { MapPin, Package, Calendar, Clock, DollarSign, User } from 'lucide-react';
+import { formatCurrency, formatPackageWeight } from '@/utils/formatters';
 
 interface JobCardProps {
   job: {
@@ -42,14 +43,6 @@ const JobCard: React.FC<JobCardProps> = ({
     'assigned': 'bg-amber-100 text-amber-800',
     'in-progress': 'bg-purple-100 text-purple-800',
     'completed': 'bg-green-100 text-green-800',
-  };
-
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
   };
 
   const isJobAssigned = job.status === 'assigned' || job.status === 'in-progress';
@@ -129,7 +122,7 @@ const JobCard: React.FC<JobCardProps> = ({
               <Package className="h-4 w-4 text-muted-foreground mr-1.5" />
               <p className="text-xs text-muted-foreground">Package Size</p>
             </div>
-            <p className="text-sm font-medium">{job.packageSize}</p>
+            <p className="text-sm font-medium">{formatPackageWeight(job.packageSize)}</p>
           </div>
           
           <div>

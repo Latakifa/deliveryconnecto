@@ -1,8 +1,10 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import AnimatedButton from '@/components/AnimatedButton';
+import LocationSelector from './map/LocationSelector';
+import { Location } from '@/types/location';
 
 interface NewJobFormProps {
   showNewJobModal: boolean;
@@ -28,11 +30,54 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
   handleNewJobChange,
   handleCreateJob
 }) => {
+  const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
+  const [dropoffLocation, setDropoffLocation] = useState<Location | null>(null);
+  
+  const handlePickupSelect = (location: Location) => {
+    setPickupLocation(location);
+    // Update the form field with the address
+    const event = {
+      target: {
+        name: 'pickup',
+        value: location.address
+      }
+    } as React.ChangeEvent<HTMLInputElement>;
+    handleNewJobChange(event);
+  };
+  
+  const handleDropoffSelect = (location: Location) => {
+    setDropoffLocation(location);
+    // Update the form field with the address
+    const event = {
+      target: {
+        name: 'dropoff',
+        value: location.address
+      }
+    } as React.ChangeEvent<HTMLInputElement>;
+    handleNewJobChange(event);
+  };
+  
+  const handleSubmitWithLocations = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Store location data in localStorage if available
+    if (pickupLocation) {
+      localStorage.setItem('pickupLocation', JSON.stringify(pickupLocation));
+    }
+    
+    if (dropoffLocation) {
+      localStorage.setItem('dropoffLocation', JSON.stringify(dropoffLocation));
+    }
+    
+    // Call the original create job handler
+    handleCreateJob(e);
+  };
+  
   if (!showNewJobModal) return null;
   
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-card rounded-lg shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-card rounded-lg shadow-lg max-w-xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h3 className="text-lg font-medium">Create New Delivery Job</h3>
           <button
@@ -43,7 +88,7 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
           </button>
         </div>
         
-        <form onSubmit={handleCreateJob} className="p-4 space-y-4">
+        <form onSubmit={handleSubmitWithLocations} className="p-4 space-y-4">
           <div>
             <label htmlFor="title" className="block text-sm font-medium mb-1">
               Job Title
@@ -77,13 +122,10 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
             <label htmlFor="pickup" className="block text-sm font-medium mb-1">
               Pickup Address
             </label>
-            <Input
-              id="pickup"
-              name="pickup"
-              value={newJob.pickup}
-              onChange={handleNewJobChange}
-              placeholder="Full pickup address"
-              required
+            <LocationSelector
+              locationType="pickup"
+              onLocationSelect={handlePickupSelect}
+              initialValue={newJob.pickup}
             />
           </div>
           
@@ -91,13 +133,10 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
             <label htmlFor="dropoff" className="block text-sm font-medium mb-1">
               Dropoff Address
             </label>
-            <Input
-              id="dropoff"
-              name="dropoff"
-              value={newJob.dropoff}
-              onChange={handleNewJobChange}
-              placeholder="Full delivery address"
-              required
+            <LocationSelector
+              locationType="dropoff"
+              onLocationSelect={handleDropoffSelect}
+              initialValue={newJob.dropoff}
             />
           </div>
           
@@ -134,17 +173,17 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="price" className="block text-sm font-medium mb-1">
-                Price ($)
+                Price (KES)
               </label>
               <Input
                 id="price"
                 name="price"
                 type="number"
-                step="0.01"
+                step="1"
                 min="0"
                 value={newJob.price}
                 onChange={handleNewJobChange}
-                placeholder="0.00"
+                placeholder="0"
                 required
               />
             </div>
@@ -160,10 +199,10 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
                 onChange={handleNewJobChange}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="Small (under 5lbs)">Small (under 5lbs)</option>
-                <option value="Medium (5-15lbs)">Medium (5-15lbs)</option>
-                <option value="Large (15-30lbs)">Large (15-30lbs)</option>
-                <option value="Extra Large (30+ lbs)">Extra Large (30+ lbs)</option>
+                <option value="Small (under 2 kg)">Small (under 2 kg)</option>
+                <option value="Medium (2-7 kg)">Medium (2-7 kg)</option>
+                <option value="Large (7-14 kg)">Large (7-14 kg)</option>
+                <option value="Extra Large (14+ kg)">Extra Large (14+ kg)</option>
               </select>
             </div>
           </div>

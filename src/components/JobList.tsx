@@ -52,22 +52,29 @@ const JobList: React.FC<JobListProps> = ({
           />
         ))
       ) : (
-        <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
-          <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-            {activeView === 'available' && <Package className="h-8 w-8 text-muted-foreground" />}
-            {activeView === 'active' && <Truck className="h-8 w-8 text-muted-foreground" />}
-            {activeView === 'completed' && <Clock className="h-8 w-8 text-muted-foreground" />}
-          </div>
-          <h3 className="text-lg font-medium mb-2">No jobs found</h3>
-          <p className="text-muted-foreground max-w-md">
-            {activeView === 'available' 
-              ? "There are no available jobs at the moment. Check back later or adjust your filters."
-              : activeView === 'active'
-              ? "You don't have any active jobs right now. Start by accepting available jobs."
-              : "You haven't completed any jobs yet. Jobs will appear here once they're finished."}
-          </p>
-        </div>
+        <EmptyJobsState activeView={activeView} />
       )}
+    </div>
+  );
+};
+
+// Extracted the empty state component to reduce the main component's complexity
+const EmptyJobsState: React.FC<{ activeView: string }> = ({ activeView }) => {
+  return (
+    <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+      <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+        {activeView === 'available' && <Package className="h-8 w-8 text-muted-foreground" />}
+        {activeView === 'active' && <Truck className="h-8 w-8 text-muted-foreground" />}
+        {activeView === 'completed' && <Clock className="h-8 w-8 text-muted-foreground" />}
+      </div>
+      <h3 className="text-lg font-medium mb-2">No jobs found</h3>
+      <p className="text-muted-foreground max-w-md">
+        {activeView === 'available' 
+          ? "There are no available jobs at the moment. Check back later or adjust your filters."
+          : activeView === 'active'
+          ? "You don't have any active jobs right now. Start by accepting available jobs."
+          : "You haven't completed any jobs yet. Jobs will appear here once they're finished."}
+      </p>
     </div>
   );
 };
