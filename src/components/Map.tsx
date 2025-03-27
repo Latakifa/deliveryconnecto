@@ -45,20 +45,23 @@ const Map: React.FC<MapProps> = ({
   const [mapInitialized, setMapInitialized] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
-  // Initialize map
+  // Initialize map with proper error handling
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
     try {
+      console.log('Initializing map...');
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v12',
         center: [-122.4194, 37.7749], // Default to San Francisco
-        zoom: 12
+        zoom: 12,
+        attributionControl: false
       });
 
       // Add navigation controls
       map.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+      map.current.addControl(new mapboxgl.AttributionControl(), 'bottom-right');
 
       // Add geolocation control
       const geolocate = new mapboxgl.GeolocateControl({
@@ -76,37 +79,42 @@ const Map: React.FC<MapProps> = ({
         console.log('Map initialized successfully');
         setMapInitialized(true);
         
-        // Add a source and layer for the route line if needed
-        if (map.current) {
-          map.current.addSource('route', {
-            type: 'geojson',
-            data: {
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                type: 'LineString',
-                coordinates: []
-              }
+        if (!map.current) return;
+
+        // Add a source and layer for the route line
+        map.current.addSource('route', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'LineString',
+              coordinates: []
             }
-          });
-          
-          map.current.addLayer({
-            id: 'route',
-            type: 'line',
-            source: 'route',
-            layout: {
-              'line-join': 'round',
-              'line-cap': 'round'
-            },
-            paint: {
-              'line-color': '#3887be',
-              'line-width': 5,
-              'line-opacity': 0.75
-            }
-          });
-          
-          routeLine.current = map.current.getSource('route') as mapboxgl.GeoJSONSource;
-        }
+          }
+        });
+        
+        map.current.addLayer({
+          id: 'route',
+          type: 'line',
+          source: 'route',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          paint: {
+            'line-color': '#3887be',
+            'line-width': 5,
+            'line-opacity': 0.75
+          }
+        });
+        
+        routeLine.current = map.current.getSource('route') as mapboxgl.GeoJSONSource;
+      });
+
+      map.current.on('error', (e) => {
+        console.error('Mapbox error:', e);
+        setMapError('There was an error loading the map components');
       });
 
       // Clean up on unmount
@@ -257,17 +265,19 @@ const Map: React.FC<MapProps> = ({
     try {
       if (carrierMarker.current) {
         carrierMarker.current.setLngLat([carrierLocation.lng, carrierLocation.lat]);
-      } else {
+      } else if (map.current) {
         carrierMarker.current = new mapboxgl.Marker({ color: '#32CD32' })
           .setLngLat([carrierLocation.lng, carrierLocation.lat])
           .addTo(map.current);
       }
       
       // Update map view to follow carrier
-      map.current.flyTo({
-        center: [carrierLocation.lng, carrierLocation.lat],
-        zoom: 15
-      });
+      if (map.current) {
+        map.current.flyTo({
+          center: [carrierLocation.lng, carrierLocation.lat],
+          zoom: 15
+        });
+      }
       
       // Update route if showRoute is true and we have both pickup and dropoff
       if (showRoute && routeLine.current && pickupLocation && dropoffLocation) {
