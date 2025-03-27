@@ -23,7 +23,7 @@ interface Job {
   date: string;
   time: string;
   price: number;
-  packageSize: string;
+  package_size: string;
   status: JobStatus;
   business_id?: string;
   carrier_id?: string;
@@ -133,7 +133,7 @@ const Dashboard: React.FC = () => {
             date: job.date,
             time: job.time,
             price: Number(job.price),
-            packageSize: job.package_size,
+            package_size: job.package_size,
             status: job.status as JobStatus,
             business_id: job.business_id,
             carrier_id: job.carrier_id
@@ -313,7 +313,7 @@ const Dashboard: React.FC = () => {
           date: data.date,
           time: data.time,
           price: Number(data.price),
-          packageSize: data.package_size,
+          package_size: data.package_size,
           status: data.status as JobStatus,
           business_id: data.business_id,
           carrier_id: data.carrier_id

@@ -10,7 +10,11 @@ export const formatCurrency = (amount: number): string => {
 };
 
 // Convert package size strings to kilograms
-export const formatPackageWeight = (packageSize: string): string => {
+export const formatPackageWeight = (packageSize: string | undefined | null): string => {
+  if (!packageSize) {
+    return 'Unknown size';
+  }
+  
   if (packageSize.includes('Small')) {
     return 'Small (under 2 kg)';
   } else if (packageSize.includes('Medium')) {
