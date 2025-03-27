@@ -12,7 +12,7 @@ interface Job {
   date: string;
   time: string;
   price: number;
-  packageSize: string;
+  package_size: string; // Changed from packageSize to package_size to match DB schema
   status: 'available' | 'assigned' | 'in-progress' | 'completed';
   business_id?: string;
   carrier_id?: string;

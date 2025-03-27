@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Map, Package, MapPin, Navigation, Clock, DollarSign, User, Truck } from 'lucide-react';
@@ -26,7 +25,7 @@ interface DeliveryJob {
   carrier_id?: string;
   customer_name?: string;
   carrier_name?: string;
-  packageSize: string;
+  package_size: string;
 }
 
 const Delivery: React.FC = () => {
@@ -69,7 +68,6 @@ const Delivery: React.FC = () => {
         }
         
         const parseLocation = (address: string): Location => {
-          // Try to get location from localStorage if it exists
           const storageKey = address === jobData.pickup ? 'pickupLocation' : 'dropoffLocation';
           const storedLocation = localStorage.getItem(storageKey);
           
@@ -81,12 +79,10 @@ const Delivery: React.FC = () => {
             }
           }
           
-          // Fallback to generating a location with an offset
           const hash = address.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
           const offset = (hash % 10) * 0.01;
           
           return {
-            // Default to Nairobi with a small offset
             lng: 36.8219 + offset,
             lat: -1.2921 + offset,
             address
@@ -126,7 +122,7 @@ const Delivery: React.FC = () => {
           carrier_id: jobData.carrier_id,
           customer_name: customerData?.full_name || 'Unknown Customer',
           carrier_name: carrierData?.full_name || undefined,
-          packageSize: jobData.package_size || jobData.packageSize // Handle both formats
+          package_size: jobData.package_size
         };
         
         setJob(formattedJob);
@@ -415,7 +411,7 @@ const Delivery: React.FC = () => {
                     <Package className="h-4 w-4" />
                     <span>Package Size</span>
                   </div>
-                  <p className="font-medium">{formatPackageWeight(job.packageSize)}</p>
+                  <p className="font-medium">{formatPackageWeight(job.package_size)}</p>
                 </div>
                 
                 <div>

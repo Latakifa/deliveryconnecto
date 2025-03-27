@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -35,7 +34,6 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
   
   const handlePickupSelect = (location: Location) => {
     setPickupLocation(location);
-    // Update the form field with the address
     const event = {
       target: {
         name: 'pickup',
@@ -47,7 +45,6 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
   
   const handleDropoffSelect = (location: Location) => {
     setDropoffLocation(location);
-    // Update the form field with the address
     const event = {
       target: {
         name: 'dropoff',
@@ -60,7 +57,6 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
   const handleSubmitWithLocations = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Store location data in localStorage if available
     if (pickupLocation) {
       localStorage.setItem('pickupLocation', JSON.stringify(pickupLocation));
     }
@@ -69,7 +65,6 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
       localStorage.setItem('dropoffLocation', JSON.stringify(dropoffLocation));
     }
     
-    // Call the original create job handler
     handleCreateJob(e);
   };
   
