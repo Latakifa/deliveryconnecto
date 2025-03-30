@@ -85,6 +85,61 @@ const MessageList: React.FC<MessageListProps> = ({
     }
   };
 
+  const handleAcceptJob = async (message: Message) => {
+    if (!currentUserId) {
+      toast.error('You must be logged in to accept jobs');
+      return;
+    }
+
+    try {
+      // First check if the job is still available
+      const { data: jobData, error: jobError } = await supabase
+        .from('jobs')
+        .select('status, carrier_id')
+        .eq('id', message.job_id)
+        .single();
+
+      if (jobError) throw jobError;
+
+      if (jobData.status !== 'available' || jobData.carrier_id) {
+        toast.error('This job is no longer available');
+        return;
+      }
+
+      // Update the job status and assign carrier
+      const { error: updateError } = await supabase
+        .from('jobs')
+        .update({ 
+          status: 'assigned',
+          carrier_id: currentUserId
+        })
+        .eq('id', message.job_id);
+
+      if (updateError) throw updateError;
+
+      // Send confirmation message
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          job_id: message.job_id,
+          sender_id: currentUserId,
+          recipient_id: message.sender_id,
+          content: 'I have accepted your job and will begin delivery soon.',
+          status: 'unread'
+        });
+
+      if (messageError) throw messageError;
+
+      toast.success('Job accepted successfully! Check your active jobs.');
+
+      // Refresh messages to show the confirmation
+      if (refreshMessages) refreshMessages();
+    } catch (error) {
+      console.error('Error accepting job:', error);
+      toast.error('Failed to accept job');
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4">
       {messages.map(message => (
@@ -119,15 +174,28 @@ const MessageList: React.FC<MessageListProps> = ({
             )}
             
             {userType === 'carrier' && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-1"
-                onClick={() => setReplyingTo(replyingTo === message.id ? null : message.id)}
-              >
-                <Send className="h-3 w-3" />
-                <span>{replyingTo === message.id ? 'Cancel' : 'Reply'}</span>
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1"
+                  onClick={() => setReplyingTo(replyingTo === message.id ? null : message.id)}
+                >
+                  <Send className="h-3 w-3" />
+                  <span>{replyingTo === message.id ? 'Cancel' : 'Reply'}</span>
+                </Button>
+                
+                {/* Add job accept button */}
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="flex items-center gap-1"
+                  onClick={() => handleAcceptJob(message)}
+                >
+                  <Check className="h-3 w-3" />
+                  <span>Accept Job</span>
+                </Button>
+              </>
             )}
           </div>
           
