@@ -174,6 +174,63 @@ const Dashboard: React.FC = () => {
     fetchJobs();
   }, [user, activeView, userType]);
   
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!user) return;
+      
+      setMessagesLoading(true);
+      
+      try {
+        const { data, error } = await supabase
+          .from('messages')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        if (error) throw error;
+        
+        if (data) {
+          const messageData = data as Message[];
+          
+          const senderIds = messageData.map(msg => msg.sender_id);
+          
+          if (senderIds.length > 0) {
+            const { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .select('id, full_name')
+              .in('id', senderIds);
+              
+            if (profileError) throw profileError;
+            
+            if (profileData) {
+              const messagesWithNames = messageData.map(msg => {
+                const senderProfile = profileData.find(profile => profile.id === msg.sender_id);
+                return {
+                  ...msg,
+                  sender_name: senderProfile?.full_name || 'Unknown Sender'
+                };
+              });
+              
+              setMessages(messagesWithNames);
+            } else {
+              setMessages(messageData);
+            }
+          } else {
+            setMessages(messageData);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching messages:', error);
+        toast.error('Failed to load messages');
+      } finally {
+        setMessagesLoading(false);
+      }
+    };
+    
+    if (activeView === 'messages') {
+      fetchMessages();
+    }
+  }, [user, activeView]);
+  
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = searchQuery === '' || 
       job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

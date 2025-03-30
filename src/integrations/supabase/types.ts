@@ -57,6 +57,44 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          job_id: string
+          recipient_id: string
+          sender_id: string
+          status: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          job_id: string
+          recipient_id: string
+          sender_id: string
+          status?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          job_id?: string
+          recipient_id?: string
+          sender_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
