@@ -26,28 +26,25 @@ const MessageCarrier: React.FC<MessageCarrierProps> = ({ carrierId, carrierName,
     setIsSending(true);
 
     try {
-      // Since there's no messages table in Supabase yet, we'll log the message and show a toast
-      // In a real app, you would create a messages table in Supabase first
-      console.log('Message would be sent to database:', {
-        job_id: jobId,
-        sender_id: businessId,
-        recipient_id: carrierId,
-        content: message,
-        status: 'sent'
-      });
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          job_id: jobId,
+          sender_id: businessId,
+          recipient_id: carrierId,
+          content: message,
+          status: 'unread'
+        })
+        .select();
+
+      if (error) throw error;
       
-      // For demonstration purposes, we'll simulate a successful message send
-      setTimeout(() => {
-        toast.success(`Message sent to ${carrierName}`);
-        setMessage('');
-        setIsSending(false);
-      }, 500);
-      
-      // Simulate sending an SMS notification
-      console.log(`SMS would be sent to carrier ${carrierId} with message: ${message}`);
+      toast.success(`Message sent to ${carrierName}`);
+      setMessage('');
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message. Please try again.');
+    } finally {
       setIsSending(false);
     }
   };

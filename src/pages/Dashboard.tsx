@@ -10,8 +10,8 @@ import { Input } from '@/components/ui/input';
 import { User, Mail, Phone, MapPin, Briefcase, Calendar, Check, Truck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import MessageList, { Message } from '@/components/MessageList';
 
-// Type definition for a job
 type JobStatus = 'available' | 'assigned' | 'in-progress' | 'completed';
 
 interface Job {
@@ -54,12 +54,8 @@ const Dashboard: React.FC = () => {
   });
   const [userName, setUserName] = useState('John Smith');
   const [carrierNames, setCarrierNames] = useState<Record<string, string>>({});
-  const [messages, setMessages] = useState([
-    { id: 1, sender: 'Support Team', content: 'Welcome to DeliveryConnect! Let us know if you need any help.', time: '2 days ago', unread: false },
-    { id: 2, sender: 'System', content: 'Your account has been successfully verified.', time: '1 day ago', unread: false },
-    { id: 3, sender: 'Sarah Johnson', content: 'Thanks for the quick delivery yesterday!', time: '5 hours ago', unread: true },
-    { id: 4, sender: 'Tech Support', content: 'The app will undergo maintenance tonight from 2-3 AM.', time: '1 hour ago', unread: true },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   
@@ -342,14 +338,28 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleMarkAsRead = (messageId: number) => {
-    setMessages(prev => 
-      prev.map(message => 
-        message.id === messageId 
-          ? { ...message, unread: false } 
-          : message
-      )
-    );
+  const handleMarkAsRead = async (messageId: string) => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ status: 'read' })
+        .eq('id', messageId);
+      
+      if (error) throw error;
+      
+      setMessages(prev => 
+        prev.map(message => 
+          message.id === messageId 
+            ? { ...message, status: 'read' } 
+            : message
+        )
+      );
+      
+      toast.success('Message marked as read');
+    } catch (error) {
+      console.error('Error marking message as read:', error);
+      toast.error('Failed to update message status');
+    }
   };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -440,33 +450,17 @@ const Dashboard: React.FC = () => {
 
           {activeView === 'messages' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 gap-4">
-                {messages.map(message => (
-                  <div 
-                    key={message.id} 
-                    className={`p-4 rounded-lg border ${message.unread ? 'bg-primary/5 border-primary/20' : 'bg-card border-border'}`}
-                    onClick={() => handleMarkAsRead(message.id)}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-medium flex items-center gap-2">
-                        {message.sender}
-                        {message.unread && (
-                          <span className="h-2 w-2 rounded-full bg-primary"></span>
-                        )}
-                      </h3>
-                      <span className="text-xs text-muted-foreground">{message.time}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{message.content}</p>
-                  </div>
-                ))}
-              </div>
-              
-              {messages.length === 0 && (
+              {messagesLoading ? (
                 <div className="text-center py-10">
-                  <Mail className="h-12 w-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                  <h3 className="text-xl font-medium mb-2">No messages yet</h3>
-                  <p className="text-muted-foreground">You don't have any messages in your inbox.</p>
+                  <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+                  <p className="text-muted-foreground mt-2">Loading messages...</p>
                 </div>
+              ) : (
+                <MessageList 
+                  messages={messages} 
+                  onMarkAsRead={handleMarkAsRead}
+                  userType={userType}
+                />
               )}
             </div>
           )}
