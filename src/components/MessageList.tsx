@@ -36,6 +36,7 @@ const MessageList: React.FC<MessageListProps> = ({
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [processingJobs, setProcessingJobs] = useState<Set<string>>(new Set());
 
   if (messages.length === 0) {
     return (
@@ -91,11 +92,18 @@ const MessageList: React.FC<MessageListProps> = ({
       return;
     }
 
+    if (processingJobs.has(message.job_id)) {
+      toast.info('Job acceptance is already in progress');
+      return;
+    }
+
+    setProcessingJobs(prev => new Set([...prev, message.job_id]));
+
     try {
       // First check if the job is still available
       const { data: jobData, error: jobError } = await supabase
         .from('jobs')
-        .select('status, carrier_id')
+        .select('status, carrier_id, business_id')
         .eq('id', message.job_id)
         .single();
 
@@ -117,13 +125,13 @@ const MessageList: React.FC<MessageListProps> = ({
 
       if (updateError) throw updateError;
 
-      // Send confirmation message
+      // Send confirmation message to the job creator
       const { error: messageError } = await supabase
         .from('messages')
         .insert({
           job_id: message.job_id,
           sender_id: currentUserId,
-          recipient_id: message.sender_id,
+          recipient_id: jobData.business_id || message.sender_id, // Use the actual business_id from the job
           content: 'I have accepted your job and will begin delivery soon.',
           status: 'unread'
         });
@@ -132,11 +140,29 @@ const MessageList: React.FC<MessageListProps> = ({
 
       toast.success('Job accepted successfully! Check your active jobs.');
 
-      // Refresh messages to show the confirmation
-      if (refreshMessages) refreshMessages();
+      // Wait a moment before refreshing to ensure database consistency
+      setTimeout(() => {
+        // Refresh messages to show the confirmation
+        if (refreshMessages) refreshMessages();
+        
+        // Redirect to active jobs tab (this would need to be handled in Dashboard.tsx)
+        const event = new CustomEvent('jobAccepted', { 
+          detail: { 
+            jobId: message.job_id,
+            carrierId: currentUserId
+          } 
+        });
+        window.dispatchEvent(event);
+      }, 500);
     } catch (error) {
       console.error('Error accepting job:', error);
       toast.error('Failed to accept job');
+    } finally {
+      setProcessingJobs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(message.job_id);
+        return newSet;
+      });
     }
   };
 
@@ -185,15 +211,18 @@ const MessageList: React.FC<MessageListProps> = ({
                   <span>{replyingTo === message.id ? 'Cancel' : 'Reply'}</span>
                 </Button>
                 
-                {/* Add job accept button */}
+                {/* Job accept button */}
                 <Button
                   variant="default"
                   size="sm"
                   className="flex items-center gap-1"
                   onClick={() => handleAcceptJob(message)}
+                  disabled={processingJobs.has(message.job_id)}
                 >
                   <Check className="h-3 w-3" />
-                  <span>Accept Job</span>
+                  <span>
+                    {processingJobs.has(message.job_id) ? 'Processing...' : 'Accept Job'}
+                  </span>
                 </Button>
               </>
             )}

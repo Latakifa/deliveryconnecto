@@ -92,6 +92,26 @@ const Dashboard: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
+    const handleJobAccepted = (event: CustomEvent) => {
+      const { jobId, carrierId } = event.detail;
+      
+      setJobs(prevJobs => prevJobs.map(job => 
+        job.id === jobId 
+          ? { ...job, status: 'assigned' as JobStatus, carrier_id: carrierId } 
+          : job
+      ));
+      
+      setActiveView('active');
+    };
+
+    window.addEventListener('jobAccepted', handleJobAccepted as EventListener);
+    
+    return () => {
+      window.removeEventListener('jobAccepted', handleJobAccepted as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
     const fetchJobs = async () => {
       if (!user) return;
       
@@ -174,64 +194,68 @@ const Dashboard: React.FC = () => {
     fetchJobs();
   }, [user, activeView, userType]);
   
-  const fetchMessages = async () => {
-    if (!user) return;
-    
-    setMessagesLoading(true);
-    
-    try {
-      let query = supabase
-        .from('messages')
-        .select('*')
-        .order('created_at', { ascending: false });
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!user) return;
       
-      if (userType === 'carrier') {
-        query = query.eq('recipient_id', user.id);
-      } else if (userType === 'business') {
-        query = query.or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`);
-      }
+      setMessagesLoading(true);
       
-      const { data, error } = await query;
-        
-      if (error) throw error;
+      try {
+        let query = supabase
+          .from('messages')
+          .select('*')
+          .order('created_at', { ascending: false });
       
-      if (data) {
-        const messageData = data as Message[];
+        if (userType === 'carrier') {
+          query = query.eq('recipient_id', user.id);
+        } else if (userType === 'business') {
+          query = query.or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`);
+        }
         
-        const senderIds = messageData.map(msg => msg.sender_id);
+        const { data, error } = await query;
         
-        if (senderIds.length > 0) {
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', senderIds);
-            
-          if (profileError) throw profileError;
+        if (error) throw error;
+        
+        if (data) {
+          const messageData = data as Message[];
           
-          if (profileData) {
-            const messagesWithNames = messageData.map(msg => {
-              const senderProfile = profileData.find(profile => profile.id === msg.sender_id);
-              return {
-                ...msg,
-                sender_name: senderProfile?.full_name || 'Unknown Sender'
-              };
-            });
+          const senderIds = messageData.map(msg => msg.sender_id);
+          
+          if (senderIds.length > 0) {
+            const { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .select('id, full_name')
+              .in('id', senderIds);
             
-            setMessages(messagesWithNames);
+            if (profileError) throw profileError;
+            
+            if (profileData) {
+              const messagesWithNames = messageData.map(msg => {
+                const senderProfile = profileData.find(profile => profile.id === msg.sender_id);
+                return {
+                  ...msg,
+                  sender_name: senderProfile?.full_name || 'Unknown Sender'
+                };
+              });
+              
+              setMessages(messagesWithNames);
+            } else {
+              setMessages(messageData);
+            }
           } else {
             setMessages(messageData);
           }
-        } else {
-          setMessages(messageData);
         }
+      } catch (error) {
+        console.error('Error fetching messages:', error);
+        toast.error('Failed to load messages');
+      } finally {
+        setMessagesLoading(false);
       }
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      toast.error('Failed to load messages');
-    } finally {
-      setMessagesLoading(false);
-    }
-  };
+    };
+    
+    fetchMessages();
+  }, [user, activeView, userType]);
   
   useEffect(() => {
     if (activeView === 'messages') {
