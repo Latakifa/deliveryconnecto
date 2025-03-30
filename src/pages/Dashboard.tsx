@@ -174,62 +174,70 @@ const Dashboard: React.FC = () => {
     fetchJobs();
   }, [user, activeView, userType]);
   
-  useEffect(() => {
-    const fetchMessages = async () => {
-      if (!user) return;
+  const fetchMessages = async () => {
+    if (!user) return;
+    
+    setMessagesLoading(true);
+    
+    try {
+      let query = supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: false });
       
-      setMessagesLoading(true);
+      if (userType === 'carrier') {
+        query = query.eq('recipient_id', user.id);
+      } else if (userType === 'business') {
+        query = query.or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`);
+      }
       
-      try {
-        const { data, error } = await supabase
-          .from('messages')
-          .select('*')
-          .order('created_at', { ascending: false });
-          
-        if (error) throw error;
+      const { data, error } = await query;
         
-        if (data) {
-          const messageData = data as Message[];
-          
-          const senderIds = messageData.map(msg => msg.sender_id);
-          
-          if (senderIds.length > 0) {
-            const { data: profileData, error: profileError } = await supabase
-              .from('profiles')
-              .select('id, full_name')
-              .in('id', senderIds);
-              
-            if (profileError) throw profileError;
+      if (error) throw error;
+      
+      if (data) {
+        const messageData = data as Message[];
+        
+        const senderIds = messageData.map(msg => msg.sender_id);
+        
+        if (senderIds.length > 0) {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', senderIds);
             
-            if (profileData) {
-              const messagesWithNames = messageData.map(msg => {
-                const senderProfile = profileData.find(profile => profile.id === msg.sender_id);
-                return {
-                  ...msg,
-                  sender_name: senderProfile?.full_name || 'Unknown Sender'
-                };
-              });
-              
-              setMessages(messagesWithNames);
-            } else {
-              setMessages(messageData);
-            }
+          if (profileError) throw profileError;
+          
+          if (profileData) {
+            const messagesWithNames = messageData.map(msg => {
+              const senderProfile = profileData.find(profile => profile.id === msg.sender_id);
+              return {
+                ...msg,
+                sender_name: senderProfile?.full_name || 'Unknown Sender'
+              };
+            });
+            
+            setMessages(messagesWithNames);
           } else {
             setMessages(messageData);
           }
+        } else {
+          setMessages(messageData);
         }
-      } catch (error) {
-        console.error('Error fetching messages:', error);
-        toast.error('Failed to load messages');
-      } finally {
-        setMessagesLoading(false);
       }
-    };
-    
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      toast.error('Failed to load messages');
+    } finally {
+      setMessagesLoading(false);
+    }
+  };
+  
+  useEffect(() => {
     if (activeView === 'messages') {
       fetchMessages();
     }
-  }, [user, activeView]);
+  }, [user, activeView, userType]);
   
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = searchQuery === '' || 
@@ -254,7 +262,7 @@ const Dashboard: React.FC = () => {
     try {
       const { data: jobCheck, error: checkError } = await supabase
         .from('jobs')
-        .select('status, carrier_id')
+        .select('status, carrier_id, business_id')
         .eq('id', jobId)
         .single();
       
@@ -275,6 +283,20 @@ const Dashboard: React.FC = () => {
         .eq('id', jobId);
       
       if (error) throw error;
+      
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          job_id: jobId,
+          sender_id: user.id,
+          recipient_id: jobCheck.business_id,
+          content: `I have accepted your job and will begin delivery soon.`,
+          status: 'unread'
+        });
+      
+      if (messageError) {
+        console.error('Error sending acceptance message:', messageError);
+      }
       
       setJobs(prevJobs => prevJobs.map(job => 
         job.id === jobId 
@@ -517,6 +539,8 @@ const Dashboard: React.FC = () => {
                   messages={messages} 
                   onMarkAsRead={handleMarkAsRead}
                   userType={userType}
+                  currentUserId={user?.id}
+                  refreshMessages={fetchMessages}
                 />
               )}
             </div>

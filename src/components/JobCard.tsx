@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { cn } from '@/lib/utils';
 import AnimatedButton from './AnimatedButton';
@@ -45,6 +46,7 @@ const JobCard: React.FC<JobCardProps> = ({
 
   const isJobAssigned = job.status === 'assigned' || job.status === 'in-progress';
   
+  // If carrier type, show accept button for all available jobs
   const showAcceptButton = type === 'carrier' && 
                           job.status === 'available' && 
                           !job.carrier_id;

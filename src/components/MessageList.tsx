@@ -1,8 +1,9 @@
 
-import React from 'react';
-import { Mail, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { Mail, Check, Send } from 'lucide-react';
 import { formatRelativeTime } from '@/utils/formatters';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -21,9 +22,21 @@ interface MessageListProps {
   messages: Message[];
   onMarkAsRead: (messageId: string) => void;
   userType: 'business' | 'carrier';
+  currentUserId?: string;
+  refreshMessages?: () => void;
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, onMarkAsRead, userType }) => {
+const MessageList: React.FC<MessageListProps> = ({ 
+  messages, 
+  onMarkAsRead, 
+  userType, 
+  currentUserId,
+  refreshMessages 
+}) => {
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyContent, setReplyContent] = useState('');
+  const [isSending, setIsSending] = useState(false);
+
   if (messages.length === 0) {
     return (
       <div className="text-center py-10">
@@ -37,6 +50,40 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onMarkAsRead, userT
       </div>
     );
   }
+
+  const handleReply = async (message: Message) => {
+    if (!replyContent.trim() || !currentUserId) {
+      toast.error('Please enter a message');
+      return;
+    }
+
+    setIsSending(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          job_id: message.job_id,
+          sender_id: currentUserId,
+          recipient_id: message.sender_id, // Reply to the original sender
+          content: replyContent,
+          status: 'unread'
+        })
+        .select();
+
+      if (error) throw error;
+      
+      toast.success('Reply sent successfully');
+      setReplyContent('');
+      setReplyingTo(null);
+      if (refreshMessages) refreshMessages();
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      toast.error('Failed to send reply. Please try again.');
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -58,16 +105,51 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onMarkAsRead, userT
           </div>
           <p className="text-sm text-muted-foreground mb-3">{message.content}</p>
           
-          {message.status === 'unread' && userType === 'carrier' && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-1"
-              onClick={() => onMarkAsRead(message.id)}
-            >
-              <Check className="h-3 w-3" />
-              <span>Mark as read</span>
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            {message.status === 'unread' && userType === 'carrier' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1"
+                onClick={() => onMarkAsRead(message.id)}
+              >
+                <Check className="h-3 w-3" />
+                <span>Mark as read</span>
+              </Button>
+            )}
+            
+            {userType === 'carrier' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1"
+                onClick={() => setReplyingTo(replyingTo === message.id ? null : message.id)}
+              >
+                <Send className="h-3 w-3" />
+                <span>{replyingTo === message.id ? 'Cancel' : 'Reply'}</span>
+              </Button>
+            )}
+          </div>
+          
+          {replyingTo === message.id && (
+            <div className="mt-3">
+              <Textarea
+                placeholder="Type your reply..."
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
+                className="min-h-[80px] mb-2"
+              />
+              <Button
+                variant="default"
+                size="sm"
+                disabled={isSending || !replyContent.trim()}
+                onClick={() => handleReply(message)}
+                className="flex items-center gap-1"
+              >
+                <Send className="h-3 w-3" />
+                <span>{isSending ? 'Sending...' : 'Send Reply'}</span>
+              </Button>
+            </div>
           )}
         </div>
       ))}
