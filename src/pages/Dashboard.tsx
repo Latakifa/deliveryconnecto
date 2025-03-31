@@ -194,68 +194,64 @@ const Dashboard: React.FC = () => {
     fetchJobs();
   }, [user, activeView, userType]);
   
-  useEffect(() => {
-    const fetchMessages = async () => {
-      if (!user) return;
+  const fetchMessages = async () => {
+    if (!user) return;
+    
+    setMessagesLoading(true);
+    
+    try {
+      let query = supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: false });
+    
+      if (userType === 'carrier') {
+        query = query.eq('recipient_id', user.id);
+      } else if (userType === 'business') {
+        query = query.or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`);
+      }
       
-      setMessagesLoading(true);
+      const { data, error } = await query;
       
-      try {
-        let query = supabase
-          .from('messages')
-          .select('*')
-          .order('created_at', { ascending: false });
+      if (error) throw error;
       
-        if (userType === 'carrier') {
-          query = query.eq('recipient_id', user.id);
-        } else if (userType === 'business') {
-          query = query.or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`);
-        }
+      if (data) {
+        const messageData = data as Message[];
         
-        const { data, error } = await query;
+        const senderIds = messageData.map(msg => msg.sender_id);
         
-        if (error) throw error;
-        
-        if (data) {
-          const messageData = data as Message[];
+        if (senderIds.length > 0) {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', senderIds);
           
-          const senderIds = messageData.map(msg => msg.sender_id);
+          if (profileError) throw profileError;
           
-          if (senderIds.length > 0) {
-            const { data: profileData, error: profileError } = await supabase
-              .from('profiles')
-              .select('id, full_name')
-              .in('id', senderIds);
+          if (profileData) {
+            const messagesWithNames = messageData.map(msg => {
+              const senderProfile = profileData.find(profile => profile.id === msg.sender_id);
+              return {
+                ...msg,
+                sender_name: senderProfile?.full_name || 'Unknown Sender'
+              };
+            });
             
-            if (profileError) throw profileError;
-            
-            if (profileData) {
-              const messagesWithNames = messageData.map(msg => {
-                const senderProfile = profileData.find(profile => profile.id === msg.sender_id);
-                return {
-                  ...msg,
-                  sender_name: senderProfile?.full_name || 'Unknown Sender'
-                };
-              });
-              
-              setMessages(messagesWithNames);
-            } else {
-              setMessages(messageData);
-            }
+            setMessages(messagesWithNames);
           } else {
             setMessages(messageData);
           }
+        } else {
+          setMessages(messageData);
         }
-      } catch (error) {
-        console.error('Error fetching messages:', error);
-        toast.error('Failed to load messages');
-      } finally {
-        setMessagesLoading(false);
       }
-    };
-    
-    fetchMessages();
-  }, [user, activeView, userType]);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      toast.error('Failed to load messages');
+    } finally {
+      setMessagesLoading(false);
+    }
+  };
   
   useEffect(() => {
     if (activeView === 'messages') {
