@@ -140,20 +140,19 @@ const MessageList: React.FC<MessageListProps> = ({
 
       toast.success('Job accepted successfully! Check your active jobs.');
 
-      // Wait a moment before refreshing to ensure database consistency
-      setTimeout(() => {
-        // Refresh messages to show the confirmation
-        if (refreshMessages) refreshMessages();
-        
-        // Redirect to active jobs tab (this would need to be handled in Dashboard.tsx)
-        const event = new CustomEvent('jobAccepted', { 
-          detail: { 
-            jobId: message.job_id,
-            carrierId: currentUserId
-          } 
-        });
-        window.dispatchEvent(event);
-      }, 500);
+      // Dispatch a custom event to notify Dashboard component about the job acceptance
+      const event = new CustomEvent('jobAccepted', { 
+        detail: { 
+          jobId: message.job_id,
+          carrierId: currentUserId
+        } 
+      });
+      window.dispatchEvent(event);
+      
+      // After successful job acceptance, refresh the messages list
+      if (refreshMessages) {
+        setTimeout(refreshMessages, 500);
+      }
     } catch (error) {
       console.error('Error accepting job:', error);
       toast.error('Failed to accept job');
