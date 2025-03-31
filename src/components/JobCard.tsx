@@ -46,8 +46,7 @@ const JobCard: React.FC<JobCardProps> = ({
 
   const isJobAssigned = job.status === 'assigned' || job.status === 'in-progress';
   
-  // Only show accept button for available jobs that don't have a carrier assigned
-  // and only for carrier users viewing the job
+  // For carrier type, show accept button for all available jobs that don't have a carrier assigned
   const showAcceptButton = type === 'carrier' && 
                            job.status === 'available' && 
                            !job.carrier_id;

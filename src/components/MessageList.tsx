@@ -36,7 +36,6 @@ const MessageList: React.FC<MessageListProps> = ({
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [processingJobs, setProcessingJobs] = useState<Set<string>>(new Set());
 
   if (messages.length === 0) {
     return (
@@ -86,85 +85,6 @@ const MessageList: React.FC<MessageListProps> = ({
     }
   };
 
-  const handleAcceptJob = async (message: Message) => {
-    if (!currentUserId) {
-      toast.error('You must be logged in to accept jobs');
-      return;
-    }
-
-    if (processingJobs.has(message.job_id)) {
-      toast.info('Job acceptance is already in progress');
-      return;
-    }
-
-    setProcessingJobs(prev => new Set([...prev, message.job_id]));
-
-    try {
-      // First check if the job is still available
-      const { data: jobData, error: jobError } = await supabase
-        .from('jobs')
-        .select('status, carrier_id, business_id')
-        .eq('id', message.job_id)
-        .single();
-
-      if (jobError) throw jobError;
-
-      if (jobData.status !== 'available' || jobData.carrier_id) {
-        toast.error('This job is no longer available');
-        return;
-      }
-
-      // Update the job status and assign carrier
-      const { error: updateError } = await supabase
-        .from('jobs')
-        .update({ 
-          status: 'assigned',
-          carrier_id: currentUserId
-        })
-        .eq('id', message.job_id);
-
-      if (updateError) throw updateError;
-
-      // Send confirmation message to the job creator
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          job_id: message.job_id,
-          sender_id: currentUserId,
-          recipient_id: jobData.business_id || message.sender_id, // Use the actual business_id from the job
-          content: 'I have accepted your job and will begin delivery soon.',
-          status: 'unread'
-        });
-
-      if (messageError) throw messageError;
-
-      toast.success('Job accepted successfully! Check your active jobs.');
-
-      // Dispatch a custom event to notify Dashboard component about the job acceptance
-      const event = new CustomEvent('jobAccepted', { 
-        detail: { 
-          jobId: message.job_id,
-          carrierId: currentUserId
-        } 
-      });
-      window.dispatchEvent(event);
-      
-      // After successful job acceptance, refresh the messages list
-      if (refreshMessages) {
-        setTimeout(refreshMessages, 500);
-      }
-    } catch (error) {
-      console.error('Error accepting job:', error);
-      toast.error('Failed to accept job');
-    } finally {
-      setProcessingJobs(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(message.job_id);
-        return newSet;
-      });
-    }
-  };
-
   return (
     <div className="grid grid-cols-1 gap-4">
       {messages.map(message => (
@@ -199,31 +119,15 @@ const MessageList: React.FC<MessageListProps> = ({
             )}
             
             {userType === 'carrier' && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-1"
-                  onClick={() => setReplyingTo(replyingTo === message.id ? null : message.id)}
-                >
-                  <Send className="h-3 w-3" />
-                  <span>{replyingTo === message.id ? 'Cancel' : 'Reply'}</span>
-                </Button>
-                
-                {/* Job accept button */}
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="flex items-center gap-1"
-                  onClick={() => handleAcceptJob(message)}
-                  disabled={processingJobs.has(message.job_id)}
-                >
-                  <Check className="h-3 w-3" />
-                  <span>
-                    {processingJobs.has(message.job_id) ? 'Processing...' : 'Accept Job'}
-                  </span>
-                </Button>
-              </>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1"
+                onClick={() => setReplyingTo(replyingTo === message.id ? null : message.id)}
+              >
+                <Send className="h-3 w-3" />
+                <span>{replyingTo === message.id ? 'Cancel' : 'Reply'}</span>
+              </Button>
             )}
           </div>
           
