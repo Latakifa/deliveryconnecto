@@ -12,7 +12,7 @@ interface Job {
   date: string;
   time: string;
   price: number;
-  package_size: string; // Ensures this is consistent with other interfaces
+  package_size: string;
   status: 'available' | 'assigned' | 'in-progress' | 'completed';
   business_id?: string;
   carrier_id?: string;
