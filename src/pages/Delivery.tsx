@@ -229,23 +229,38 @@ const Delivery: React.FC = () => {
   const handleAcceptDelivery = async () => {
     if (!job || !user) return;
     
-    if (job?.status !== 'available' || job?.carrier_id) {
-      toast.error('This job is no longer available');
-      navigate('/dashboard');
-      return;
-    }
-    
     try {
+      const { data: jobCheck, error: checkError } = await supabase
+        .from('jobs')
+        .select('business_id')
+        .eq('id', job.id)
+        .single();
+      
+      if (checkError) throw checkError;
+      
       const { error } = await supabase
         .from('jobs')
         .update({ 
           status: 'assigned',
           carrier_id: user.id
         })
-        .eq('id', job.id)
-        .is('carrier_id', null);
+        .eq('id', job.id);
       
       if (error) throw error;
+      
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          job_id: job.id,
+          sender_id: user.id,
+          recipient_id: jobCheck.business_id,
+          content: `I have accepted your job and will begin delivery soon.`,
+          status: 'unread'
+        });
+      
+      if (messageError) {
+        console.error('Error sending acceptance message:', messageError);
+      }
       
       const { data: profileData } = await supabase
         .from('profiles')
@@ -260,10 +275,10 @@ const Delivery: React.FC = () => {
         carrier_name: profileData?.full_name || 'Unknown Carrier'
       } : null);
       
-      toast.success('Delivery accepted!');
+      toast.success(job.carrier_id ? 'Job taken over successfully!' : 'Job accepted successfully!');
     } catch (error) {
       console.error('Error accepting delivery:', error);
-      toast.error('Failed to accept delivery');
+      toast.error('Failed to accept job');
     }
   };
 
@@ -468,9 +483,9 @@ const Delivery: React.FC = () => {
                   </div>
                 )}
                 
-                {job?.status === 'available' && (
+                {user?.id && user.id !== job?.customer_id && job?.status !== 'completed' && (
                   <Button className="w-full" onClick={handleAcceptDelivery}>
-                    Accept Delivery
+                    {job?.carrier_id ? "Take Over Job" : "Accept Job"}
                   </Button>
                 )}
                 
