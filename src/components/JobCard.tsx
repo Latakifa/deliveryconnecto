@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { cn } from '@/lib/utils';
 import AnimatedButton from './AnimatedButton';
@@ -45,8 +46,8 @@ const JobCard: React.FC<JobCardProps> = ({
 
   const isJobAssigned = job.status === 'assigned' || job.status === 'in-progress';
   
-  // Show accept button for ALL available jobs to carriers
-  const showAcceptButton = type === 'carrier' && job.status === 'available';
+  // Show accept button for all carriers regardless of job status or assignment
+  const showAcceptButton = type === 'carrier';
   
   const isAssignedToCurrentUser = job.carrier_id === currentUserId;
 
@@ -143,7 +144,7 @@ const JobCard: React.FC<JobCardProps> = ({
               variant="primary"
               className="w-full sm:w-auto"
             >
-              Accept Job
+              {job.carrier_id ? "Take Over Job" : "Accept Job"}
             </AnimatedButton>
           )}
           
