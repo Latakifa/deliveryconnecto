@@ -46,10 +46,8 @@ const JobCard: React.FC<JobCardProps> = ({
 
   const isJobAssigned = job.status === 'assigned' || job.status === 'in-progress';
   
-  // Show accept button for all carriers regardless of job status or assignment
-  const showAcceptButton = type === 'carrier';
-  
-  const isAssignedToCurrentUser = job.carrier_id === currentUserId;
+  // Only show accept button for carriers when jobs are available
+  const showAcceptButton = type === 'carrier' && job.status === 'available';
 
   return (
     <div 
@@ -144,7 +142,7 @@ const JobCard: React.FC<JobCardProps> = ({
               variant="primary"
               className="w-full sm:w-auto"
             >
-              {job.carrier_id ? "Take Over Job" : "Accept Job"}
+              Accept Job
             </AnimatedButton>
           )}
           
