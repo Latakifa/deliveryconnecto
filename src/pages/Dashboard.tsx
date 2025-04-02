@@ -35,6 +35,12 @@ interface Profile {
   full_name: string | null;
   user_type: 'business' | 'carrier' | null;
   avatar_url: string | null;
+  location?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  vehicle_type?: string | null;
+  license_number?: string | null;
+  founded?: string | null;
 }
 
 const Dashboard: React.FC = () => {
@@ -59,6 +65,8 @@ const Dashboard: React.FC = () => {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [formUpdate, setFormUpdate] = useState<Profile>({} as Profile);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
@@ -79,10 +87,17 @@ const Dashboard: React.FC = () => {
             id: data.id,
             full_name: data.full_name,
             user_type: data.user_type as 'business' | 'carrier' | null,
-            avatar_url: data.avatar_url
+            avatar_url: data.avatar_url,
+            location: data.location,
+            phone: data.phone,
+            company: data.company,
+            vehicle_type: data.vehicle_type,
+            license_number: data.license_number,
+            founded: data.founded
           };
           
           setProfile(profileData);
+          setFormUpdate(profileData);
           if (data.full_name) setUserName(data.full_name);
           if (data.user_type) setUserType(data.user_type as 'business' | 'carrier');
         }
@@ -219,6 +234,12 @@ const Dashboard: React.FC = () => {
       if (data) {
         const messageData = data as Message[];
         
+        // Count unread messages
+        const unreadCount = messageData.filter(msg => 
+          msg.recipient_id === user.id && msg.status === 'unread'
+        ).length;
+        setUnreadMessageCount(unreadCount);
+        
         const senderIds = messageData.map(msg => msg.sender_id);
         
         if (senderIds.length > 0) {
@@ -255,7 +276,7 @@ const Dashboard: React.FC = () => {
   };
   
   useEffect(() => {
-    if (activeView === 'messages') {
+    if (activeView === 'messages' || unreadMessageCount === 0) {
       fetchMessages();
     }
   }, [user, activeView, userType]);
@@ -281,30 +302,44 @@ const Dashboard: React.FC = () => {
     }
     
     try {
+      // First check if the job is still available
       const { data: jobCheck, error: checkError } = await supabase
         .from('jobs')
         .select('status, carrier_id, business_id')
         .eq('id', jobId)
         .single();
       
-      if (checkError) throw checkError;
+      if (checkError) {
+        console.error('Error checking job status:', checkError);
+        throw checkError;
+      }
       
       if (jobCheck.status !== 'available' || jobCheck.carrier_id) {
         toast.error('This job is no longer available');
+        // Refresh job list to show current state
+        const activeViewBackup = activeView;
         setActiveView('available');
+        setTimeout(() => fetchJobs(), 500);
         return;
       }
       
+      // If job is available, try to accept it
       const { error } = await supabase
         .from('jobs')
         .update({ 
           status: 'assigned',
           carrier_id: user.id
         })
-        .eq('id', jobId);
+        .eq('id', jobId)
+        .eq('status', 'available')
+        .is('carrier_id', null);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error accepting job:', error);
+        throw error;
+      }
       
+      // Send a message to the business owner
       const { error: messageError } = await supabase
         .from('messages')
         .insert({
@@ -319,6 +354,7 @@ const Dashboard: React.FC = () => {
         console.error('Error sending acceptance message:', messageError);
       }
       
+      // Update local state
       setJobs(prevJobs => prevJobs.map(job => 
         job.id === jobId 
           ? { ...job, status: 'assigned' as JobStatus, carrier_id: user.id } 
@@ -333,8 +369,8 @@ const Dashboard: React.FC = () => {
       toast.success('Job accepted successfully! Check your active jobs.');
       setActiveView('active');
     } catch (error) {
-      console.error('Error accepting job:', error);
-      toast.error('Failed to accept job');
+      console.error('Error in job acceptance process:', error);
+      toast.error('Failed to accept job. Please try again.');
     }
   };
   
@@ -455,6 +491,9 @@ const Dashboard: React.FC = () => {
         )
       );
       
+      // Update unread count
+      setUnreadMessageCount(prev => prev > 0 ? prev - 1 : 0);
+      
       toast.success('Message marked as read');
     } catch (error) {
       console.error('Error marking message as read:', error);
@@ -478,15 +517,20 @@ const Dashboard: React.FC = () => {
       statusCounts[job.status]++;
     });
     
+    const totalEarnings = relevantJobs
+      .filter(job => job.status === 'completed')
+      .reduce((sum, job) => sum + job.price, 0);
+    
+    const activeJobsCount = statusCounts['assigned'] + statusCounts['in-progress'];
+    const completedJobsCount = statusCounts['completed'];
+    const totalJobsCount = activeJobsCount + completedJobsCount + statusCounts['available'];
+    
     const statusChartData = [
       { name: 'Available', value: statusCounts['available'], color: '#3b82f6' },
       { name: 'Assigned', value: statusCounts['assigned'], color: '#f59e0b' },
       { name: 'In Progress', value: statusCounts['in-progress'], color: '#8b5cf6' },
       { name: 'Completed', value: statusCounts['completed'], color: '#10b981' }
     ];
-    
-    const activeJobsCount = statusCounts['assigned'] + statusCounts['in-progress'];
-    const completedJobsCount = statusCounts['completed'];
     
     const activeVsCompletedData = [
       { name: 'Active Jobs', value: activeJobsCount, color: '#8b5cf6' },
@@ -495,40 +539,60 @@ const Dashboard: React.FC = () => {
     
     return {
       statusChartData,
-      activeVsCompletedData
+      activeVsCompletedData,
+      totalJobsCount,
+      activeJobsCount,
+      completedJobsCount,
+      totalEarnings
     };
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormUpdate(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const formData = new FormData(e.target as HTMLFormElement);
-    const formValues = Object.fromEntries(formData.entries());
+    if (!user) return;
     
-    if (user) {
+    try {
       const updates = {
         id: user.id,
-        full_name: formValues.name as string || userName,
+        full_name: formUpdate.full_name || profile?.full_name || userName,
         user_type: userType,
+        location: formUpdate.location || profile?.location,
+        phone: formUpdate.phone || profile?.phone,
+        company: formUpdate.company || profile?.company,
+        vehicle_type: formUpdate.vehicle_type || profile?.vehicle_type,
+        license_number: formUpdate.license_number || profile?.license_number,
+        founded: formUpdate.founded || profile?.founded,
         updated_at: new Date().toISOString(),
       };
       
-      try {
-        const { error } = await supabase
-          .from('profiles')
-          .update(updates)
-          .eq('id', user.id);
-        
-        if (error) {
-          throw error;
-        }
-        
-        setUserName(formValues.name as string || userName);
-        toast.success('Profile updated successfully!');
-      } catch (error) {
-        console.error('Error updating profile:', error);
-        toast.error('Failed to update profile');
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+      
+      if (error) {
+        throw error;
       }
+      
+      setProfile(prev => ({
+        ...(prev || {} as Profile),
+        ...updates
+      }));
+      
+      setUserName(updates.full_name || userName);
+      toast.success('Profile updated successfully!');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
     }
   };
 
@@ -537,7 +601,14 @@ const Dashboard: React.FC = () => {
     toast.success('Settings updated successfully!');
   };
 
-  const { statusChartData, activeVsCompletedData } = generateAnalyticsData();
+  const { 
+    statusChartData, 
+    activeVsCompletedData, 
+    totalJobsCount,
+    activeJobsCount,
+    completedJobsCount,
+    totalEarnings 
+  } = generateAnalyticsData();
 
   if (loading && jobs.length === 0) {
     return (
@@ -549,6 +620,7 @@ const Dashboard: React.FC = () => {
           toggleUserType={toggleUserType}
           handleLogout={handleLogout}
           userName={userName}
+          notificationCounts={{ messages: unreadMessageCount }}
         />
         <div className="flex-1 flex flex-col max-h-screen overflow-hidden">
           <DashboardHeader activeView={activeView} userName={userName} />
@@ -569,6 +641,7 @@ const Dashboard: React.FC = () => {
         toggleUserType={toggleUserType}
         handleLogout={handleLogout}
         userName={userName}
+        notificationCounts={{ messages: unreadMessageCount }}
       />
       
       <div className="flex-1 flex flex-col max-h-screen overflow-hidden">
@@ -603,6 +676,29 @@ const Dashboard: React.FC = () => {
                 Overview of your {userType === 'business' ? 'business' : 'carrier'} delivery activities
               </p>
               
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-6">
+                <div className="bg-card border border-border rounded-lg p-6 flex flex-col items-center justify-center">
+                  <p className="text-muted-foreground text-sm">Total Jobs</p>
+                  <p className="text-3xl font-semibold mt-2">{totalJobsCount}</p>
+                </div>
+                <div className="bg-card border border-border rounded-lg p-6 flex flex-col items-center justify-center">
+                  <p className="text-muted-foreground text-sm">Active Jobs</p>
+                  <p className="text-3xl font-semibold mt-2 text-purple-500">{activeJobsCount}</p>
+                </div>
+                <div className="bg-card border border-border rounded-lg p-6 flex flex-col items-center justify-center">
+                  <p className="text-muted-foreground text-sm">Completed Jobs</p>
+                  <p className="text-3xl font-semibold mt-2 text-green-500">{completedJobsCount}</p>
+                </div>
+                <div className="bg-card border border-border rounded-lg p-6 flex flex-col items-center justify-center">
+                  <p className="text-muted-foreground text-sm">
+                    {userType === 'business' ? 'Total Spent' : 'Total Earned'}
+                  </p>
+                  <p className="text-3xl font-semibold mt-2 text-amber-500">
+                    ${totalEarnings.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                 <DeliveryAnalytics 
                   title="Job Status Distribution"
@@ -623,28 +719,24 @@ const Dashboard: React.FC = () => {
                 <h3 className="text-lg font-medium mb-4">Performance Summary</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-background p-4 rounded-md border border-border">
-                    <p className="text-muted-foreground text-sm">Total Jobs</p>
+                    <p className="text-muted-foreground text-sm">Completion Rate</p>
                     <p className="text-2xl font-semibold">
-                      {userType === 'carrier' 
-                        ? jobs.filter(job => job.carrier_id === user?.id).length
-                        : jobs.length}
+                      {totalJobsCount > 0 
+                        ? `${Math.round((completedJobsCount / totalJobsCount) * 100)}%` 
+                        : '0%'}
                     </p>
                   </div>
                   <div className="bg-background p-4 rounded-md border border-border">
-                    <p className="text-muted-foreground text-sm">Active Jobs</p>
+                    <p className="text-muted-foreground text-sm">Average Job Value</p>
                     <p className="text-2xl font-semibold">
-                      {userType === 'carrier'
-                        ? jobs.filter(job => (job.status === 'assigned' || job.status === 'in-progress') && job.carrier_id === user?.id).length
-                        : jobs.filter(job => job.status === 'assigned' || job.status === 'in-progress').length}
+                      {completedJobsCount > 0 
+                        ? `$${(totalEarnings / completedJobsCount).toFixed(2)}` 
+                        : '$0.00'}
                     </p>
                   </div>
                   <div className="bg-background p-4 rounded-md border border-border">
-                    <p className="text-muted-foreground text-sm">Completed Jobs</p>
-                    <p className="text-2xl font-semibold">
-                      {userType === 'carrier'
-                        ? jobs.filter(job => job.status === 'completed' && job.carrier_id === user?.id).length
-                        : jobs.filter(job => job.status === 'completed').length}
-                    </p>
+                    <p className="text-muted-foreground text-sm">Customer Rating</p>
+                    <p className="text-2xl font-semibold">4.8/5</p>
                   </div>
                 </div>
               </div>
@@ -677,7 +769,7 @@ const Dashboard: React.FC = () => {
                   <div className="w-32 h-32 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                     <User className="h-16 w-16 text-primary" />
                   </div>
-                  <h2 className="text-xl font-medium">{userName}</h2>
+                  <h2 className="text-xl font-medium">{profile?.full_name || userName}</h2>
                   <p className="text-sm text-muted-foreground capitalize">{userType}</p>
                 </div>
                 
@@ -685,13 +777,14 @@ const Dashboard: React.FC = () => {
                   <form onSubmit={handleUpdateProfile} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label htmlFor="name" className="text-sm font-medium">Full Name</label>
+                        <label htmlFor="full_name" className="text-sm font-medium">Full Name</label>
                         <div className="relative">
                           <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                           <Input 
-                            id="name" 
-                            name="name"
-                            defaultValue={userName} 
+                            id="full_name" 
+                            name="full_name"
+                            value={formUpdate.full_name || profile?.full_name || ''} 
+                            onChange={handleInputChange}
                             className="pl-10" 
                           />
                         </div>
@@ -704,7 +797,7 @@ const Dashboard: React.FC = () => {
                           <Input 
                             id="email" 
                             name="email"
-                            defaultValue={user?.email || "john.smith@example.com"} 
+                            value={user?.email || ""} 
                             readOnly
                             className="pl-10 bg-muted cursor-not-allowed" 
                           />
@@ -718,7 +811,8 @@ const Dashboard: React.FC = () => {
                           <Input 
                             id="phone" 
                             name="phone"
-                            defaultValue="(555) 123-4567" 
+                            value={formUpdate.phone || profile?.phone || ''} 
+                            onChange={handleInputChange}
                             className="pl-10" 
                           />
                         </div>
@@ -731,7 +825,8 @@ const Dashboard: React.FC = () => {
                           <Input 
                             id="location" 
                             name="location"
-                            defaultValue="San Francisco, CA" 
+                            value={formUpdate.location || profile?.location || ''} 
+                            onChange={handleInputChange}
                             className="pl-10" 
                           />
                         </div>
@@ -740,26 +835,28 @@ const Dashboard: React.FC = () => {
                       {userType === 'carrier' && (
                         <>
                           <div className="space-y-2">
-                            <label htmlFor="vehicle" className="text-sm font-medium">Vehicle Type</label>
+                            <label htmlFor="vehicle_type" className="text-sm font-medium">Vehicle Type</label>
                             <div className="relative">
                               <Truck className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input 
-                                id="vehicle" 
-                                name="vehicle"
-                                defaultValue="Sedan" 
+                                id="vehicle_type" 
+                                name="vehicle_type"
+                                value={formUpdate.vehicle_type || profile?.vehicle_type || ''} 
+                                onChange={handleInputChange}
                                 className="pl-10" 
                               />
                             </div>
                           </div>
                           
                           <div className="space-y-2">
-                            <label htmlFor="license" className="text-sm font-medium">License Number</label>
+                            <label htmlFor="license_number" className="text-sm font-medium">License Number</label>
                             <div className="relative">
                               <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                               <Input 
-                                id="license" 
-                                name="license"
-                                defaultValue="CA-123456" 
+                                id="license_number" 
+                                name="license_number"
+                                value={formUpdate.license_number || profile?.license_number || ''} 
+                                onChange={handleInputChange}
                                 className="pl-10" 
                               />
                             </div>
@@ -776,7 +873,8 @@ const Dashboard: React.FC = () => {
                               <Input 
                                 id="company" 
                                 name="company"
-                                defaultValue="Acme Inc." 
+                                value={formUpdate.company || profile?.company || ''} 
+                                onChange={handleInputChange}
                                 className="pl-10" 
                               />
                             </div>
@@ -789,7 +887,8 @@ const Dashboard: React.FC = () => {
                               <Input 
                                 id="founded" 
                                 name="founded"
-                                defaultValue="2015" 
+                                value={formUpdate.founded || profile?.founded || ''} 
+                                onChange={handleInputChange}
                                 className="pl-10" 
                               />
                             </div>
@@ -799,168 +898,3 @@ const Dashboard: React.FC = () => {
                     </div>
                     
                     <div className="pt-4">
-                      <button
-                        type="submit"
-                        className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 inline-flex items-center"
-                      >
-                        <Check className="h-4 w-4 mr-2" />
-                        Save Changes
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-              
-              <div className="bg-card border border-border rounded-lg p-6">
-                <h3 className="text-lg font-medium mb-4">Account Statistics</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-background p-4 rounded-md border border-border">
-                    <p className="text-muted-foreground text-sm">Total Jobs</p>
-                    <p className="text-2xl font-semibold">
-                      {userType === 'carrier' 
-                        ? jobs.filter(job => job.carrier_id === user?.id).length
-                        : jobs.length}
-                    </p>
-                  </div>
-                  <div className="bg-background p-4 rounded-md border border-border">
-                    <p className="text-muted-foreground text-sm">Completed</p>
-                    <p className="text-2xl font-semibold">
-                      {userType === 'carrier'
-                        ? jobs.filter(job => job.status === 'completed' && job.carrier_id === user?.id).length
-                        : jobs.filter(job => job.status === 'completed').length}
-                    </p>
-                  </div>
-                  <div className="bg-background p-4 rounded-md border border-border">
-                    <p className="text-muted-foreground text-sm">Rating</p>
-                    <p className="text-2xl font-semibold">4.8/5</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeView === 'settings' && (
-            <div className="max-w-3xl mx-auto">
-              <form onSubmit={handleUpdateSettings} className="space-y-8">
-                <div className="bg-card border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-medium mb-4">Notifications</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Email Notifications</p>
-                        <p className="text-sm text-muted-foreground">Receive job updates via email</p>
-                      </div>
-                      <div className="flex items-center h-6">
-                        <input 
-                          type="checkbox" 
-                          defaultChecked 
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">SMS Notifications</p>
-                        <p className="text-sm text-muted-foreground">Receive text messages for important updates</p>
-                      </div>
-                      <div className="flex items-center h-6">
-                        <input 
-                          type="checkbox" 
-                          defaultChecked 
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Push Notifications</p>
-                        <p className="text-sm text-muted-foreground">Receive push notifications in-app</p>
-                      </div>
-                      <div className="flex items-center h-6">
-                        <input 
-                          type="checkbox" 
-                          defaultChecked 
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-card border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-medium mb-4">Privacy</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Profile Visibility</p>
-                        <p className="text-sm text-muted-foreground">Make your profile visible to others</p>
-                      </div>
-                      <div className="flex items-center h-6">
-                        <input 
-                          type="checkbox" 
-                          defaultChecked 
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Location Sharing</p>
-                        <p className="text-sm text-muted-foreground">Share your location during active deliveries</p>
-                      </div>
-                      <div className="flex items-center h-6">
-                        <input 
-                          type="checkbox" 
-                          defaultChecked 
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-card border border-border rounded-lg p-6">
-                  <h3 className="text-lg font-medium mb-4">Account</h3>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label htmlFor="current-password" className="text-sm font-medium">Current Password</label>
-                      <Input id="current-password" type="password" />
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="new-password" className="text-sm font-medium">New Password</label>
-                      <Input id="new-password" type="password" />
-                    </div>
-                    <div className="space-y-2">
-                      <label htmlFor="confirm-password" className="text-sm font-medium">Confirm New Password</label>
-                      <Input id="confirm-password" type="password" />
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <button
-                    type="submit"
-                    className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 inline-flex items-center"
-                  >
-                    <Check className="h-4 w-4 mr-2" />
-                    Save Settings
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-        </main>
-      </div>
-      
-      <NewJobForm
-        showNewJobModal={showNewJobModal}
-        setShowNewJobModal={setShowNewJobModal}
-        newJob={newJob}
-        handleNewJobChange={handleNewJobChange}
-        handleCreateJob={handleCreateJob}
-      />
-    </div>
-  );
-};
-
-export default Dashboard;

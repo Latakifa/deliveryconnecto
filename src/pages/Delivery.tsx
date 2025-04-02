@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Map, Package, MapPin, Navigation, Clock, DollarSign, User, Truck } from 'lucide-react';
@@ -230,13 +231,20 @@ const Delivery: React.FC = () => {
     if (!job || !user) return;
     
     try {
+      // First check if the job is still available
       const { data: jobCheck, error: checkError } = await supabase
         .from('jobs')
-        .select('business_id')
+        .select('status, business_id, carrier_id')
         .eq('id', job.id)
         .single();
       
       if (checkError) throw checkError;
+      
+      if (jobCheck.status !== 'available' || jobCheck.carrier_id) {
+        toast.error('This job is no longer available');
+        navigate('/dashboard');
+        return;
+      }
       
       const { error } = await supabase
         .from('jobs')
@@ -244,7 +252,9 @@ const Delivery: React.FC = () => {
           status: 'assigned',
           carrier_id: user.id
         })
-        .eq('id', job.id);
+        .eq('id', job.id)
+        .eq('status', 'available')
+        .is('carrier_id', null);
       
       if (error) throw error;
       
@@ -275,7 +285,7 @@ const Delivery: React.FC = () => {
         carrier_name: profileData?.full_name || 'Unknown Carrier'
       } : null);
       
-      toast.success(job.carrier_id ? 'Job taken over successfully!' : 'Job accepted successfully!');
+      toast.success('Job accepted successfully!');
     } catch (error) {
       console.error('Error accepting delivery:', error);
       toast.error('Failed to accept job');
@@ -483,9 +493,9 @@ const Delivery: React.FC = () => {
                   </div>
                 )}
                 
-                {user?.id && user.id !== job?.customer_id && job?.status !== 'completed' && (
+                {job?.status === 'available' && user?.id && user.id !== job?.customer_id && (
                   <Button className="w-full" onClick={handleAcceptDelivery}>
-                    {job?.carrier_id ? "Take Over Job" : "Accept Job"}
+                    Accept Job
                   </Button>
                 )}
                 

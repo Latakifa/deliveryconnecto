@@ -12,6 +12,9 @@ interface DashboardSidebarProps {
   toggleUserType: () => void;
   handleLogout: () => void;
   userName?: string;
+  notificationCounts?: {
+    messages: number;
+  };
 }
 
 const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
@@ -20,7 +23,8 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   userType,
   toggleUserType,
   handleLogout,
-  userName = "John Smith"
+  userName = "John Smith",
+  notificationCounts
 }) => {
   const { user } = useAuth();
   
@@ -95,7 +99,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         <button
           onClick={() => setActiveView('messages')}
           className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors",
+            "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors relative",
             activeView === 'messages'
               ? "bg-primary/10 text-primary font-medium"
               : "text-muted-foreground hover:bg-secondary hover:text-foreground"
@@ -103,6 +107,11 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
         >
           <MessageCircle className="h-5 w-5" />
           <span>Messages</span>
+          {notificationCounts?.messages && notificationCounts.messages > 0 && (
+            <span className="absolute right-2 top-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              {notificationCounts.messages}
+            </span>
+          )}
         </button>
         
         <button
