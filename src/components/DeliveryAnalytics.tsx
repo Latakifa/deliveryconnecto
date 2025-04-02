@@ -7,7 +7,11 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
 } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -19,12 +23,14 @@ interface AnalyticsProps {
   }[];
   title: string;
   description?: string;
+  chartType?: 'bar' | 'pie';
 }
 
 const DeliveryAnalytics: React.FC<AnalyticsProps> = ({ 
   data, 
   title, 
-  description 
+  description,
+  chartType = 'bar'
 }) => {
   return (
     <Card>
@@ -35,28 +41,49 @@ const DeliveryAnalytics: React.FC<AnalyticsProps> = ({
       <CardContent>
         <div className="h-[200px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={data}
-              margin={{
-                top: 5,
-                right: 30,
-                left: 20,
-                bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              {data.map((entry, index) => (
-                <Bar 
-                  key={`bar-${index}`}
-                  dataKey="value" 
-                  fill={entry.color || '#8884d8'} 
-                  name={entry.name}
-                />
-              ))}
-            </BarChart>
+            {chartType === 'bar' ? (
+              <BarChart
+                data={data}
+                margin={{
+                  top: 5,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                {data.map((entry, index) => (
+                  <Bar 
+                    key={`bar-${index}`}
+                    dataKey="value" 
+                    fill={entry.color || '#8884d8'} 
+                    name={entry.name}
+                  />
+                ))}
+              </BarChart>
+            ) : (
+              <PieChart>
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                >
+                  {data.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            )}
           </ResponsiveContainer>
         </div>
       </CardContent>

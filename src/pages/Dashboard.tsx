@@ -11,6 +11,7 @@ import { User, Mail, Phone, MapPin, Briefcase, Calendar, Check, Truck } from 'lu
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import MessageList, { Message } from '@/components/MessageList';
+import DeliveryAnalytics from '@/components/DeliveryAnalytics';
 
 type JobStatus = 'available' | 'assigned' | 'in-progress' | 'completed';
 
@@ -461,26 +462,72 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const generateAnalyticsData = () => {
+    const statusCounts: Record<JobStatus, number> = {
+      'available': 0,
+      'assigned': 0,
+      'in-progress': 0,
+      'completed': 0
+    };
+    
+    const relevantJobs = userType === 'business' 
+      ? jobs 
+      : jobs.filter(job => job.carrier_id === user?.id);
+    
+    relevantJobs.forEach(job => {
+      statusCounts[job.status]++;
+    });
+    
+    const statusChartData = [
+      { name: 'Available', value: statusCounts['available'], color: '#3b82f6' },
+      { name: 'Assigned', value: statusCounts['assigned'], color: '#f59e0b' },
+      { name: 'In Progress', value: statusCounts['in-progress'], color: '#8b5cf6' },
+      { name: 'Completed', value: statusCounts['completed'], color: '#10b981' }
+    ];
+    
+    const activeJobsCount = statusCounts['assigned'] + statusCounts['in-progress'];
+    const completedJobsCount = statusCounts['completed'];
+    
+    const activeVsCompletedData = [
+      { name: 'Active Jobs', value: activeJobsCount, color: '#8b5cf6' },
+      { name: 'Completed Jobs', value: completedJobsCount, color: '#10b981' }
+    ];
+    
+    return {
+      statusChartData,
+      activeVsCompletedData
+    };
+  };
+
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const formData = new FormData(e.target as HTMLFormElement);
+    const formValues = Object.fromEntries(formData.entries());
     
     if (user) {
       const updates = {
         id: user.id,
-        full_name: userName,
+        full_name: formValues.name as string || userName,
         user_type: userType,
         updated_at: new Date().toISOString(),
       };
       
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
-      
-      if (error) {
-        toast.error('Failed to update profile: ' + error.message);
-      } else {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', user.id);
+        
+        if (error) {
+          throw error;
+        }
+        
+        setUserName(formValues.name as string || userName);
         toast.success('Profile updated successfully!');
+      } catch (error) {
+        console.error('Error updating profile:', error);
+        toast.error('Failed to update profile');
       }
     }
   };
@@ -489,6 +536,8 @@ const Dashboard: React.FC = () => {
     e.preventDefault();
     toast.success('Settings updated successfully!');
   };
+
+  const { statusChartData, activeVsCompletedData } = generateAnalyticsData();
 
   if (loading && jobs.length === 0) {
     return (
@@ -547,6 +596,61 @@ const Dashboard: React.FC = () => {
             />
           )}
 
+          {activeView === 'analytics' && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold tracking-tight">Delivery Analytics</h2>
+              <p className="text-muted-foreground">
+                Overview of your {userType === 'business' ? 'business' : 'carrier'} delivery activities
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <DeliveryAnalytics 
+                  title="Job Status Distribution"
+                  description="Breakdown of jobs by current status"
+                  data={statusChartData}
+                  chartType="pie"
+                />
+                
+                <DeliveryAnalytics 
+                  title="Active vs. Completed Jobs"
+                  description="Comparison of active and completed jobs"
+                  data={activeVsCompletedData}
+                  chartType="bar"
+                />
+              </div>
+              
+              <div className="bg-card border border-border rounded-lg p-6 mt-6">
+                <h3 className="text-lg font-medium mb-4">Performance Summary</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-background p-4 rounded-md border border-border">
+                    <p className="text-muted-foreground text-sm">Total Jobs</p>
+                    <p className="text-2xl font-semibold">
+                      {userType === 'carrier' 
+                        ? jobs.filter(job => job.carrier_id === user?.id).length
+                        : jobs.length}
+                    </p>
+                  </div>
+                  <div className="bg-background p-4 rounded-md border border-border">
+                    <p className="text-muted-foreground text-sm">Active Jobs</p>
+                    <p className="text-2xl font-semibold">
+                      {userType === 'carrier'
+                        ? jobs.filter(job => (job.status === 'assigned' || job.status === 'in-progress') && job.carrier_id === user?.id).length
+                        : jobs.filter(job => job.status === 'assigned' || job.status === 'in-progress').length}
+                    </p>
+                  </div>
+                  <div className="bg-background p-4 rounded-md border border-border">
+                    <p className="text-muted-foreground text-sm">Completed Jobs</p>
+                    <p className="text-2xl font-semibold">
+                      {userType === 'carrier'
+                        ? jobs.filter(job => job.status === 'completed' && job.carrier_id === user?.id).length
+                        : jobs.filter(job => job.status === 'completed').length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeView === 'messages' && (
             <div className="space-y-6">
               {messagesLoading ? (
@@ -584,7 +688,12 @@ const Dashboard: React.FC = () => {
                         <label htmlFor="name" className="text-sm font-medium">Full Name</label>
                         <div className="relative">
                           <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input id="name" defaultValue={userName} className="pl-10" />
+                          <Input 
+                            id="name" 
+                            name="name"
+                            defaultValue={userName} 
+                            className="pl-10" 
+                          />
                         </div>
                       </div>
                       
@@ -592,7 +701,13 @@ const Dashboard: React.FC = () => {
                         <label htmlFor="email" className="text-sm font-medium">Email</label>
                         <div className="relative">
                           <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input id="email" defaultValue="john.smith@example.com" className="pl-10" />
+                          <Input 
+                            id="email" 
+                            name="email"
+                            defaultValue={user?.email || "john.smith@example.com"} 
+                            readOnly
+                            className="pl-10 bg-muted cursor-not-allowed" 
+                          />
                         </div>
                       </div>
                       
@@ -600,7 +715,12 @@ const Dashboard: React.FC = () => {
                         <label htmlFor="phone" className="text-sm font-medium">Phone</label>
                         <div className="relative">
                           <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input id="phone" defaultValue="(555) 123-4567" className="pl-10" />
+                          <Input 
+                            id="phone" 
+                            name="phone"
+                            defaultValue="(555) 123-4567" 
+                            className="pl-10" 
+                          />
                         </div>
                       </div>
                       
@@ -608,7 +728,12 @@ const Dashboard: React.FC = () => {
                         <label htmlFor="location" className="text-sm font-medium">Location</label>
                         <div className="relative">
                           <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input id="location" defaultValue="San Francisco, CA" className="pl-10" />
+                          <Input 
+                            id="location" 
+                            name="location"
+                            defaultValue="San Francisco, CA" 
+                            className="pl-10" 
+                          />
                         </div>
                       </div>
                       
@@ -618,7 +743,12 @@ const Dashboard: React.FC = () => {
                             <label htmlFor="vehicle" className="text-sm font-medium">Vehicle Type</label>
                             <div className="relative">
                               <Truck className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input id="vehicle" defaultValue="Sedan" className="pl-10" />
+                              <Input 
+                                id="vehicle" 
+                                name="vehicle"
+                                defaultValue="Sedan" 
+                                className="pl-10" 
+                              />
                             </div>
                           </div>
                           
@@ -626,7 +756,12 @@ const Dashboard: React.FC = () => {
                             <label htmlFor="license" className="text-sm font-medium">License Number</label>
                             <div className="relative">
                               <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input id="license" defaultValue="CA-123456" className="pl-10" />
+                              <Input 
+                                id="license" 
+                                name="license"
+                                defaultValue="CA-123456" 
+                                className="pl-10" 
+                              />
                             </div>
                           </div>
                         </>
@@ -638,7 +773,12 @@ const Dashboard: React.FC = () => {
                             <label htmlFor="company" className="text-sm font-medium">Company Name</label>
                             <div className="relative">
                               <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input id="company" defaultValue="Acme Inc." className="pl-10" />
+                              <Input 
+                                id="company" 
+                                name="company"
+                                defaultValue="Acme Inc." 
+                                className="pl-10" 
+                              />
                             </div>
                           </div>
                           
@@ -646,7 +786,12 @@ const Dashboard: React.FC = () => {
                             <label htmlFor="founded" className="text-sm font-medium">Founded</label>
                             <div className="relative">
                               <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                              <Input id="founded" defaultValue="2015" className="pl-10" />
+                              <Input 
+                                id="founded" 
+                                name="founded"
+                                defaultValue="2015" 
+                                className="pl-10" 
+                              />
                             </div>
                           </div>
                         </>
@@ -673,7 +818,7 @@ const Dashboard: React.FC = () => {
                     <p className="text-muted-foreground text-sm">Total Jobs</p>
                     <p className="text-2xl font-semibold">
                       {userType === 'carrier' 
-                        ? jobs.filter(job => job.status !== 'available' && carrierNames[job.id] === userName).length
+                        ? jobs.filter(job => job.carrier_id === user?.id).length
                         : jobs.length}
                     </p>
                   </div>
@@ -681,7 +826,7 @@ const Dashboard: React.FC = () => {
                     <p className="text-muted-foreground text-sm">Completed</p>
                     <p className="text-2xl font-semibold">
                       {userType === 'carrier'
-                        ? jobs.filter(job => job.status === 'completed' && carrierNames[job.id] === userName).length
+                        ? jobs.filter(job => job.status === 'completed' && job.carrier_id === user?.id).length
                         : jobs.filter(job => job.status === 'completed').length}
                     </p>
                   </div>
