@@ -36,12 +36,14 @@ interface Profile {
   full_name: string | null;
   user_type: 'business' | 'carrier' | null;
   avatar_url: string | null;
-  location?: string | null;
-  phone?: string | null;
-  company?: string | null;
-  vehicle_type?: string | null;
-  license_number?: string | null;
-  founded?: string | null;
+  location: string | null;
+  phone: string | null;
+  company: string | null;
+  vehicle_type: string | null;
+  license_number: string | null;
+  founded: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const Dashboard: React.FC = () => {
@@ -94,7 +96,9 @@ const Dashboard: React.FC = () => {
             company: data.company,
             vehicle_type: data.vehicle_type,
             license_number: data.license_number,
-            founded: data.founded
+            founded: data.founded,
+            created_at: data.created_at,
+            updated_at: data.updated_at
           };
           
           setProfile(profileData);
