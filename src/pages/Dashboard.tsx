@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import MessageList, { Message } from '@/components/MessageList';
 import DeliveryAnalytics from '@/components/DeliveryAnalytics';
+import { Button } from '@/components/ui/button';
 
 type JobStatus = 'available' | 'assigned' | 'in-progress' | 'completed';
 
@@ -234,7 +235,6 @@ const Dashboard: React.FC = () => {
       if (data) {
         const messageData = data as Message[];
         
-        // Count unread messages
         const unreadCount = messageData.filter(msg => 
           msg.recipient_id === user.id && msg.status === 'unread'
         ).length;
@@ -302,7 +302,6 @@ const Dashboard: React.FC = () => {
     }
     
     try {
-      // First check if the job is still available
       const { data: jobCheck, error: checkError } = await supabase
         .from('jobs')
         .select('status, carrier_id, business_id')
@@ -316,14 +315,12 @@ const Dashboard: React.FC = () => {
       
       if (jobCheck.status !== 'available' || jobCheck.carrier_id) {
         toast.error('This job is no longer available');
-        // Refresh job list to show current state
         const activeViewBackup = activeView;
         setActiveView('available');
         setTimeout(() => fetchJobs(), 500);
         return;
       }
       
-      // If job is available, try to accept it
       const { error } = await supabase
         .from('jobs')
         .update({ 
@@ -339,7 +336,6 @@ const Dashboard: React.FC = () => {
         throw error;
       }
       
-      // Send a message to the business owner
       const { error: messageError } = await supabase
         .from('messages')
         .insert({
@@ -354,7 +350,6 @@ const Dashboard: React.FC = () => {
         console.error('Error sending acceptance message:', messageError);
       }
       
-      // Update local state
       setJobs(prevJobs => prevJobs.map(job => 
         job.id === jobId 
           ? { ...job, status: 'assigned' as JobStatus, carrier_id: user.id } 
@@ -491,7 +486,6 @@ const Dashboard: React.FC = () => {
         )
       );
       
-      // Update unread count
       setUnreadMessageCount(prev => prev > 0 ? prev - 1 : 0);
       
       toast.success('Message marked as read');
@@ -898,3 +892,43 @@ const Dashboard: React.FC = () => {
                     </div>
                     
                     <div className="pt-4">
+                      <Button type="submit" className="w-full">
+                        Update Profile
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeView === 'settings' && (
+            <div className="max-w-3xl mx-auto">
+              <div className="bg-card border border-border rounded-lg p-6">
+                <h2 className="text-xl font-medium mb-4">Account Settings</h2>
+                <form onSubmit={handleUpdateSettings} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Notification Preferences</label>
+                    <div className="flex gap-2 flex-wrap">
+                      <div className="flex items-center bg-background p-2 rounded-md border border-border">
+                        <input type="checkbox" id="notify-email" className="mr-2" defaultChecked />
+                        <label htmlFor="notify-email">Email Notifications</label>
+                      </div>
+                      <div className="flex items-center bg-background p-2 rounded-md border border-border">
+                        <input type="checkbox" id="notify-app" className="mr-2" defaultChecked />
+                        <label htmlFor="notify-app">In-App Notifications</label>
+                      </div>
+                    </div>
+                  </div>
+                  <Button type="submit">Save Settings</Button>
+                </form>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
