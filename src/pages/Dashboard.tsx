@@ -154,44 +154,6 @@ const Dashboard: React.FC = () => {
   };
   
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (user) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-        
-        if (error) {
-          console.error('Error fetching profile:', error);
-        } else if (data) {
-          const profileData: Profile = {
-            id: data.id,
-            full_name: data.full_name,
-            user_type: data.user_type as 'business' | 'carrier' | null,
-            avatar_url: data.avatar_url,
-            location: data.location || null,
-            phone: data.phone || null,
-            company: data.company || null,
-            vehicle_type: data.vehicle_type || null,
-            license_number: data.license_number || null,
-            founded: data.founded || null,
-            created_at: data.created_at,
-            updated_at: data.updated_at
-          };
-          
-          setProfile(profileData);
-          setFormUpdate(profileData);
-          if (data.full_name) setUserName(data.full_name);
-          if (data.user_type) setUserType(data.user_type as 'business' | 'carrier');
-        }
-      }
-    };
-    
-    fetchProfile();
-  }, [user]);
-
-  useEffect(() => {
     const handleJobAccepted = (event: CustomEvent) => {
       const { jobId, carrierId } = event.detail;
       
@@ -367,6 +329,10 @@ const Dashboard: React.FC = () => {
       
       toast.success('Job accepted successfully! Check your active jobs.');
       setActiveView('active');
+      
+      setTimeout(() => {
+        fetchJobs();
+      }, 500);
     } catch (error) {
       console.error('Error in job acceptance process:', error);
       toast.error('Failed to accept job. Please try again.');
