@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -75,7 +74,6 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   
-  // Define fetchJobs at the component level so it can be used anywhere in the component
   const fetchJobs = async () => {
     if (!user) return;
     
@@ -167,7 +165,6 @@ const Dashboard: React.FC = () => {
         if (error) {
           console.error('Error fetching profile:', error);
         } else if (data) {
-          // Handle the case when properties might not exist in the data
           const profileData: Profile = {
             id: data.id,
             full_name: data.full_name,
@@ -387,11 +384,6 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       console.error('Logout error:', error);
     }
-  };
-  
-  const toggleUserType = () => {
-    setUserType(prevType => prevType === 'carrier' ? 'business' : 'carrier');
-    toast.info(`Switched to ${userType === 'carrier' ? 'Business' : 'Carrier'} view`);
   };
   
   const handleNewJobChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -618,7 +610,6 @@ const Dashboard: React.FC = () => {
           activeView={activeView}
           setActiveView={setActiveView}
           userType={userType}
-          toggleUserType={toggleUserType}
           handleLogout={handleLogout}
           userName={userName}
           notificationCounts={{ messages: unreadMessageCount }}
@@ -639,7 +630,6 @@ const Dashboard: React.FC = () => {
         activeView={activeView}
         setActiveView={setActiveView}
         userType={userType}
-        toggleUserType={toggleUserType}
         handleLogout={handleLogout}
         userName={userName}
         notificationCounts={{ messages: unreadMessageCount }}
