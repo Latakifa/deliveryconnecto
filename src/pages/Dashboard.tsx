@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -74,6 +75,86 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   
+  // Define fetchJobs at the component level so it can be used anywhere in the component
+  const fetchJobs = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    
+    try {
+      let query = supabase.from('jobs').select('*');
+      
+      if (userType === 'business') {
+        query = query.eq('business_id', user.id);
+      } 
+      else if (userType === 'carrier') {
+        if (activeView === 'available') {
+          query = query.eq('status', 'available').is('carrier_id', null);
+        } else if (activeView === 'active') {
+          query = query.or(`and(status.eq.assigned,carrier_id.eq.${user.id}),and(status.eq.in-progress,carrier_id.eq.${user.id})`);
+        } else if (activeView === 'completed') {
+          query = query.eq('status', 'completed').eq('carrier_id', user.id);
+        }
+      }
+      
+      const { data, error } = await query.order('created_at', { ascending: false });
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (data) {
+        const formattedJobs: Job[] = data.map(job => ({
+          id: job.id,
+          title: job.title,
+          description: job.description,
+          pickup: job.pickup,
+          dropoff: job.dropoff,
+          date: job.date,
+          time: job.time,
+          price: Number(job.price),
+          package_size: job.package_size,
+          status: job.status as JobStatus,
+          business_id: job.business_id,
+          carrier_id: job.carrier_id
+        }));
+        
+        setJobs(formattedJobs);
+        
+        const carrierIds = formattedJobs
+          .filter(job => job.carrier_id)
+          .map(job => job.carrier_id as string);
+        
+        if (carrierIds.length > 0) {
+          const { data: carrierData } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', carrierIds);
+          
+          if (carrierData) {
+            const names: Record<string, string> = {};
+            carrierData.forEach(carrier => {
+              if (carrier.full_name) {
+                formattedJobs.forEach(job => {
+                  if (job.carrier_id === carrier.id) {
+                    names[job.id] = carrier.full_name || 'Unknown Carrier';
+                  }
+                });
+              }
+            });
+            
+            setCarrierNames(names);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+      toast.error('Failed to load jobs');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   useEffect(() => {
     const fetchProfile = async () => {
       if (user) {
@@ -86,17 +167,18 @@ const Dashboard: React.FC = () => {
         if (error) {
           console.error('Error fetching profile:', error);
         } else if (data) {
+          // Handle the case when properties might not exist in the data
           const profileData: Profile = {
             id: data.id,
             full_name: data.full_name,
             user_type: data.user_type as 'business' | 'carrier' | null,
             avatar_url: data.avatar_url,
-            location: data.location,
-            phone: data.phone,
-            company: data.company,
-            vehicle_type: data.vehicle_type,
-            license_number: data.license_number,
-            founded: data.founded,
+            location: data.location || null,
+            phone: data.phone || null,
+            company: data.company || null,
+            vehicle_type: data.vehicle_type || null,
+            license_number: data.license_number || null,
+            founded: data.founded || null,
             created_at: data.created_at,
             updated_at: data.updated_at
           };
@@ -133,85 +215,6 @@ const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const fetchJobs = async () => {
-      if (!user) return;
-      
-      setLoading(true);
-      
-      try {
-        let query = supabase.from('jobs').select('*');
-        
-        if (userType === 'business') {
-          query = query.eq('business_id', user.id);
-        } 
-        else if (userType === 'carrier') {
-          if (activeView === 'available') {
-            query = query.eq('status', 'available').is('carrier_id', null);
-          } else if (activeView === 'active') {
-            query = query.or(`and(status.eq.assigned,carrier_id.eq.${user.id}),and(status.eq.in-progress,carrier_id.eq.${user.id})`);
-          } else if (activeView === 'completed') {
-            query = query.eq('status', 'completed').eq('carrier_id', user.id);
-          }
-        }
-        
-        const { data, error } = await query.order('created_at', { ascending: false });
-        
-        if (error) {
-          throw error;
-        }
-        
-        if (data) {
-          const formattedJobs: Job[] = data.map(job => ({
-            id: job.id,
-            title: job.title,
-            description: job.description,
-            pickup: job.pickup,
-            dropoff: job.dropoff,
-            date: job.date,
-            time: job.time,
-            price: Number(job.price),
-            package_size: job.package_size,
-            status: job.status as JobStatus,
-            business_id: job.business_id,
-            carrier_id: job.carrier_id
-          }));
-          
-          setJobs(formattedJobs);
-          
-          const carrierIds = formattedJobs
-            .filter(job => job.carrier_id)
-            .map(job => job.carrier_id as string);
-          
-          if (carrierIds.length > 0) {
-            const { data: carrierData } = await supabase
-              .from('profiles')
-              .select('id, full_name')
-              .in('id', carrierIds);
-            
-            if (carrierData) {
-              const names: Record<string, string> = {};
-              carrierData.forEach(carrier => {
-                if (carrier.full_name) {
-                  formattedJobs.forEach(job => {
-                    if (job.carrier_id === carrier.id) {
-                      names[job.id] = carrier.full_name || 'Unknown Carrier';
-                    }
-                  });
-                }
-              });
-              
-              setCarrierNames(names);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching jobs:', error);
-        toast.error('Failed to load jobs');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     fetchJobs();
   }, [user, activeView, userType]);
   
