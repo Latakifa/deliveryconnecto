@@ -47,7 +47,10 @@ const JobCard: React.FC<JobCardProps> = ({
   const isJobAssigned = job.status === 'assigned' || job.status === 'in-progress';
   
   // Only show accept button for carriers when jobs are available
-  const showAcceptButton = type === 'carrier' && job.status === 'available';
+  // Make sure it's a carrier AND not the job creator
+  const showAcceptButton = type === 'carrier' && 
+                           job.status === 'available' && 
+                           currentUserId !== job.business_id;
 
   return (
     <div 
