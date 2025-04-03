@@ -9,7 +9,6 @@ interface DashboardSidebarProps {
   activeView: string;
   setActiveView: (view: string) => void;
   userType: 'business' | 'carrier';
-  toggleUserType: () => void;
   handleLogout: () => void;
   userName?: string;
   notificationCounts?: {
@@ -21,7 +20,6 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
   activeView,
   setActiveView,
   userType,
-  toggleUserType,
   handleLogout,
   userName = "John Smith",
   notificationCounts
@@ -153,16 +151,7 @@ const DashboardSidebar: React.FC<DashboardSidebarProps> = ({
           </div>
         </div>
         
-        <div className="flex gap-2">
-          <AnimatedButton
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={toggleUserType}
-          >
-            Switch View
-          </AnimatedButton>
-          
+        <div className="flex justify-end">
           <AnimatedButton
             variant="ghost"
             size="sm"
