@@ -49,6 +49,21 @@ interface Profile {
   updated_at?: string;
 }
 
+interface ProfileData {
+  id: string;
+  full_name: string | null;
+  user_type: string | null;
+  avatar_url: string | null;
+  location: string | null;
+  phone: string | null;
+  company: string | null;
+  vehicle_type: string | null;
+  license_number: string | null;
+  founded: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 const Dashboard: React.FC = () => {
   const [activeView, setActiveView] = useState('available');
   const [userType, setUserType] = useState<'business' | 'carrier'>('carrier');
@@ -94,9 +109,26 @@ const Dashboard: React.FC = () => {
         }
         
         if (data) {
-          setProfile(data);
-          if (data.full_name) {
-            setUserName(data.full_name);
+          const profileData = data as ProfileData;
+          
+          const userTypeValue: 'business' | 'carrier' | null = 
+            profileData.user_type === 'business' || profileData.user_type === 'carrier' 
+            ? profileData.user_type 
+            : null;
+          
+          const typedProfile: Profile = {
+            ...profileData,
+            user_type: userTypeValue
+          };
+          
+          setProfile(typedProfile);
+          
+          if (typedProfile.user_type) {
+            setUserType(typedProfile.user_type);
+          }
+          
+          if (typedProfile.full_name) {
+            setUserName(typedProfile.full_name);
           }
         }
       } catch (error) {
