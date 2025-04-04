@@ -13,6 +13,9 @@ import { supabase } from '@/integrations/supabase/client';
 import MessageList, { Message } from '@/components/MessageList';
 import DeliveryAnalytics from '@/components/DeliveryAnalytics';
 import { Button } from '@/components/ui/button';
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 type JobStatus = 'available' | 'assigned' | 'in-progress' | 'completed';
 
@@ -560,6 +563,13 @@ const Dashboard: React.FC = () => {
     toast.success('Settings updated successfully!');
   };
 
+  const toggleUserType = () => {
+    setUserType(prevType => (prevType === 'carrier' ? 'business' : 'carrier'));
+    setTimeout(() => {
+      fetchJobs();
+    }, 100);
+  };
+
   const { 
     statusChartData, 
     activeVsCompletedData, 
@@ -603,6 +613,22 @@ const Dashboard: React.FC = () => {
       
       <div className="flex-1 flex flex-col max-h-screen overflow-hidden">
         <DashboardHeader activeView={activeView} userName={userName} />
+        
+        <div className="bg-muted/50 px-4 py-2 flex items-center justify-end border-b border-border">
+          <div className="flex items-center space-x-2">
+            <span className={`text-sm ${userType === 'carrier' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+              Carrier
+            </span>
+            <Switch 
+              checked={userType === 'business'} 
+              onCheckedChange={toggleUserType}
+              aria-label="Toggle user type"
+            />
+            <span className={`text-sm ${userType === 'business' ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+              Business
+            </span>
+          </div>
+        </div>
         
         <main className="flex-1 overflow-auto p-4 md:p-6">
           {(activeView === 'available' || activeView === 'active' || activeView === 'completed') && (
@@ -890,6 +916,15 @@ const Dashboard: React.FC = () => {
           )}
         </main>
       </div>
+      
+      {showNewJobModal && (
+        <NewJobForm
+          newJob={newJob}
+          handleNewJobChange={handleNewJobChange}
+          handleCreateJob={handleCreateJob}
+          onClose={() => setShowNewJobModal(false)}
+        />
+      )}
     </div>
   );
 };
