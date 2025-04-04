@@ -80,8 +80,14 @@ const DeliveryAnalytics: React.FC<AnalyticsProps> = ({
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
+                <Legend 
+                  layout="horizontal" 
+                  verticalAlign="bottom" 
+                  align="center"
+                  wrapperStyle={{ paddingTop: 20 }}
+                  formatter={(value) => <span style={{ marginRight: 10 }}>{value}</span>}
+                />
                 <Tooltip />
-                <Legend />
               </PieChart>
             )}
           </ResponsiveContainer>
