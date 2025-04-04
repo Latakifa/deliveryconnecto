@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,7 @@ interface NewJobFormProps {
   };
   handleNewJobChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
   handleCreateJob: (e: React.FormEvent) => void;
+  onClose?: () => void; // Added the onClose prop
 }
 
 const NewJobForm: React.FC<NewJobFormProps> = ({
@@ -27,7 +29,8 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
   setShowNewJobModal,
   newJob,
   handleNewJobChange,
-  handleCreateJob
+  handleCreateJob,
+  onClose // Include onClose in the props
 }) => {
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
   const [dropoffLocation, setDropoffLocation] = useState<Location | null>(null);
@@ -68,6 +71,15 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
     handleCreateJob(e);
   };
   
+  const handleClose = () => {
+    // Use the onClose prop if provided, otherwise fall back to setShowNewJobModal
+    if (onClose) {
+      onClose();
+    } else {
+      setShowNewJobModal(false);
+    }
+  };
+  
   if (!showNewJobModal) return null;
   
   return (
@@ -76,7 +88,7 @@ const NewJobForm: React.FC<NewJobFormProps> = ({
         <div className="flex items-center justify-between border-b border-border p-4">
           <h3 className="text-lg font-medium">Create New Delivery Job</h3>
           <button
-            onClick={() => setShowNewJobModal(false)}
+            onClick={handleClose}
             className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted"
           >
             <X className="h-4 w-4" />

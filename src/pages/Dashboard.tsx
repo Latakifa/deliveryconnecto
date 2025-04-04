@@ -919,6 +919,8 @@ const Dashboard: React.FC = () => {
       
       {showNewJobModal && (
         <NewJobForm
+          showNewJobModal={showNewJobModal}
+          setShowNewJobModal={setShowNewJobModal}
           newJob={newJob}
           handleNewJobChange={handleNewJobChange}
           handleCreateJob={handleCreateJob}
